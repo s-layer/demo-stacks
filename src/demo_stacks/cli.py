@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from demo_stacks import databricks as dbx
 from demo_stacks import dataset, s3tables, semantic
 from demo_stacks.render import databricks, duckdb, semolina, snowflake
 
@@ -20,7 +21,7 @@ GENERATED = semantic.REPO_ROOT / "generated"
 DEFAULT_SCHEMAS = {
     "duckdb": s3tables.schema(10),
     "snowflake": "SNOWFLAKE_SAMPLE_DATA.TPCH_SF10",
-    "databricks": "s_layer_demo.tpch",
+    "databricks": dbx.schema("s_layer_demo", 10),
 }
 
 _SQL_RENDERERS: dict[str, Callable[..., str]] = {
@@ -115,6 +116,28 @@ def cmd_load(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dbx_load(args: argparse.Namespace) -> int:
+    defs = semantic.load(args.definitions)
+    with dbx.connect(args.http_path) as cursor:
+        if not args.views_only:
+            staging = f"{args.staging.rstrip('/')}/{dataset.schema_name(args.scale_factor)}"
+            counts = dbx.load(cursor, staging, args.scale_factor, catalog=args.catalog)
+            for table in dataset.TABLES:
+                name = f"{dbx.schema(args.catalog, args.scale_factor)}.{table}"
+                print(f"loaded {name}: {counts[table]:,} rows")
+        for name in dbx.create_views(cursor, defs, args.scale_factor, catalog=args.catalog):
+            print(f"created metric view {name}")
+    return 0
+
+
+def cmd_dbx_query(args: argparse.Namespace) -> int:
+    with dbx.connect(args.http_path) as cursor:
+        cursor.execute(args.sql or dbx.sample_query(args.catalog, args.scale_factor))
+        for row in cursor.fetchall():
+            print("\t".join(str(v) for v in row))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="demo-stacks", description=__doc__)
     parser.add_argument(
@@ -154,9 +177,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--views-only", action="store_true", help="skip loading, create views only")
     p.set_defaults(func=cmd_load)
 
+    p = sub.add_parser(
+        "dbx-load",
+        help="load staged Parquet into Unity Catalog and create the metric views (stack 2)",
+    )
+    p.add_argument("--scale-factor", "--sf", type=float, required=True)
+    p.add_argument("--staging", help="staging_uri output of the data root; tpch_sf<N>/ below it")
+    p.add_argument("--catalog", required=True)
+    p.add_argument("--http-path", required=True, help="HTTP path of the loader warehouse")
+    p.add_argument("--views-only", action="store_true", help="skip loading, create views only")
+    p.set_defaults(func=cmd_dbx_load)
+
+    p = sub.add_parser("dbx-query", help="run a query on a Databricks warehouse, e.g. the RT one")
+    p.add_argument("--http-path", required=True)
+    p.add_argument("--catalog", required=True)
+    p.add_argument("--scale-factor", "--sf", type=float, required=True)
+    p.add_argument("--sql", help="query to run instead of the sample metric view query")
+    p.set_defaults(func=cmd_dbx_query)
+
     args = parser.parse_args(argv)
     if getattr(args, "func", None) is cmd_load and not args.views_only and not args.parquet:
         parser.error("load needs --parquet unless --views-only is given")
+    if getattr(args, "func", None) is cmd_dbx_load and not args.views_only and not args.staging:
+        parser.error("dbx-load needs --staging unless --views-only is given")
     return int(args.func(args))
 
 

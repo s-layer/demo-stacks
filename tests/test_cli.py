@@ -32,7 +32,7 @@ def test_ddl_empty_schema_leaves_tables_unqualified(capsys: pytest.CaptureFixtur
 
 def test_ddl_defaults_to_the_committed_schema(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["ddl", "databricks", "--view", "tpch_orders"]) == 0
-    assert "source: s_layer_demo.tpch.orders" in capsys.readouterr().out
+    assert "source: s_layer_demo.tpch_sf10.orders" in capsys.readouterr().out
 
 
 def test_generate_prints_row_counts(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

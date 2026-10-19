@@ -1,42 +1,42 @@
-CREATE OR REPLACE VIEW s_layer_demo.tpch.tpch_sales
+CREATE OR REPLACE VIEW s_layer_demo.tpch_sf10.tpch_sales
 WITH METRICS
 LANGUAGE YAML
 AS $$
 version: 1.1
 comment: 'Line-item sales: revenue, discounts, quantities and supplier profit by order, customer, part, supplier and geography.'
-source: s_layer_demo.tpch.lineitem
+source: s_layer_demo.tpch_sf10.lineitem
 joins:
 - name: o
-  source: s_layer_demo.tpch.orders
+  source: s_layer_demo.tpch_sf10.orders
   'on': source.l_orderkey = o.o_orderkey
   joins:
   - name: c
-    source: s_layer_demo.tpch.customer
+    source: s_layer_demo.tpch_sf10.customer
     'on': o.o_custkey = c.c_custkey
     joins:
     - name: cn
-      source: s_layer_demo.tpch.nation
+      source: s_layer_demo.tpch_sf10.nation
       'on': c.c_nationkey = cn.n_nationkey
       joins:
       - name: cr
-        source: s_layer_demo.tpch.region
+        source: s_layer_demo.tpch_sf10.region
         'on': cn.n_regionkey = cr.r_regionkey
 - name: p
-  source: s_layer_demo.tpch.part
+  source: s_layer_demo.tpch_sf10.part
   'on': source.l_partkey = p.p_partkey
 - name: s
-  source: s_layer_demo.tpch.supplier
+  source: s_layer_demo.tpch_sf10.supplier
   'on': source.l_suppkey = s.s_suppkey
   joins:
   - name: sn
-    source: s_layer_demo.tpch.nation
+    source: s_layer_demo.tpch_sf10.nation
     'on': s.s_nationkey = sn.n_nationkey
     joins:
     - name: sr
-      source: s_layer_demo.tpch.region
+      source: s_layer_demo.tpch_sf10.region
       'on': sn.n_regionkey = sr.r_regionkey
 - name: ps
-  source: s_layer_demo.tpch.partsupp
+  source: s_layer_demo.tpch_sf10.partsupp
   'on': source.l_partkey = ps.ps_partkey AND source.l_suppkey = ps.ps_suppkey
 dimensions:
 - name: order_date

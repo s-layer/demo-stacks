@@ -180,6 +180,7 @@ jobs:
         root:
           - stacks/duckdb-s3tables/data
           - stacks/duckdb-s3tables/runner
+          - stacks/databricks-rt/data
       fail-fast: false
 
     steps:
