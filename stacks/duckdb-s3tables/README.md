@@ -49,7 +49,9 @@ con = duckdb.connect("views.duckdb")
 for stmt in s3tables.setup_sql(table_bucket_arn, region="eu-west-2"):
     con.execute(stmt)
 con.execute("LOAD semantic_views")
-con.sql("FROM semantic_view('tpch_sales', dimensions := ['customer_region'], metrics := ['net_revenue'])")
+con.sql(
+    "FROM semantic_view('tpch_sales', dimensions := ['customer_region'], metrics := ['net_revenue'])"
+)
 ```
 
 `demo-stacks load` creates the views in the `--database` file (the runner keeps it
