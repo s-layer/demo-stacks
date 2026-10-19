@@ -71,8 +71,8 @@ def test_load_checks_everything_before_touching_the_live_tables() -> None:
     assert "FROM cat.tpch_sf1.lineitem__load" in count_sql
     assert swaps == dbx.swap_statements("cat.tpch_sf1")
     assert swaps[:2] == [
-        "DROP TABLE IF EXISTS cat.tpch_sf1.region",
-        "ALTER TABLE cat.tpch_sf1.region__load RENAME TO cat.tpch_sf1.region",
+        "CREATE OR REPLACE TABLE cat.tpch_sf1.region DEEP CLONE cat.tpch_sf1.region__load",
+        "DROP TABLE cat.tpch_sf1.region__load",
     ]
 
 

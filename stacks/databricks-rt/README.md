@@ -55,7 +55,8 @@ just dbx-load 1           # CTAS each table on the loader, check counts, create 
 `dbx-load` loads every table under a side name (`<table>__load`) and checks the
 row counts against the TPC-H spec, including that lineitem covers every order. Only
 then does it swap them in for the live tables the metric views read, so a partial or
-expired staging upload fails loudly and leaves the served data as it was.
+expired staging upload fails loudly and leaves the served data as it was. Each swap
+is a single `CREATE OR REPLACE ... DEEP CLONE`, so RT never sees a table missing.
 `dbx-stage` syncs with `--delete`, so slices from an earlier run with more chunks
 don't linger in staging.
 
@@ -89,7 +90,7 @@ Nothing in this stack has run against a workspace yet:
 
 - the metric view YAML (nested joins, inlined facts, `MEASURE()` in derived
   measures);
-- `CLUSTER BY AUTO` on CTAS;
+- `CLUSTER BY AUTO` on CTAS, and that `DEEP CLONE` carries it to the live table;
 - whether RT serves metric views over these tables as its docs say.
 
 The tests check the SQL this stack sends and the shape of the DDL, not

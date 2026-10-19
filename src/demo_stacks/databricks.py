@@ -64,12 +64,17 @@ def load_statements(
 
 
 def swap_statements(schema: str, *, tables: Iterable[str] = dataset.TABLES) -> list[str]:
-    """Replace each live table with its checked ``<table>__load`` copy."""
+    """
+    Replace each live table with its checked ``<table>__load`` copy, then drop the copy.
+
+    ``CREATE OR REPLACE ... DEEP CLONE`` swaps a table in one atomic step, so a query
+    on RT never finds it missing. The tables still switch over one at a time.
+    """
     stmts: list[str] = []
     for t in tables:
         stmts += [
-            f"DROP TABLE IF EXISTS {schema}.{t}",
-            f"ALTER TABLE {schema}.{t}{LOAD_SUFFIX} RENAME TO {schema}.{t}",
+            f"CREATE OR REPLACE TABLE {schema}.{t} DEEP CLONE {schema}.{t}{LOAD_SUFFIX}",
+            f"DROP TABLE {schema}.{t}{LOAD_SUFFIX}",
         ]
     return stmts
 
@@ -113,7 +118,9 @@ def load(cursor: Cursor, staging_uri: str, sf: float, *, catalog: str) -> dict[s
 
     Every table is loaded under ``<table>__load`` first and checked against the
     spec. Only then do the live tables, which the metric views and RT read, get
-    replaced, so a partial or stale staging upload leaves them as they were.
+    replaced, so a partial or stale staging upload leaves them as they were. Each
+    replacement is atomic, but they happen one table at a time, so a run that dies
+    mid-swap leaves some tables new and some old; rerunning the load finishes it.
 
     Returns:
         Rows per table, plus ``orders_in_lineitem`` (see :func:`count_rows`).
