@@ -17,24 +17,23 @@ Two Terraform roots:
 
 ## Load a scale factor
 
+From the repo root, with AWS credentials in your environment:
+
 ```sh
-cd stacks/duckdb-s3tables
-terraform -chdir=data init && terraform -chdir=data apply
-
-terraform -chdir=runner init
-terraform -chdir=runner apply \
-  -var table_bucket_arn="$(terraform -chdir=data output -raw table_bucket_arn)" \
-  -var results_bucket="$(terraform -chdir=data output -raw results_bucket)" \
-  -var run_id=load-sf10 -var scale_factor=10
-
-# The instance terminates when the job ends. Check the log, then tidy up:
-aws s3 cp "s3://$(terraform -chdir=data output -raw results_bucket)/runs/load-sf10/runner.log" -
-terraform -chdir=runner destroy -var ...   # same -var flags as apply
+just s3-data-apply            # once: table bucket, namespaces, results bucket
+just s3-load 10               # launch a runner that loads SF10 into tpch_sf10
+just s3-runner-status         # instance state, then the job log once uploaded
+just s3-runner-destroy        # after it finishes: remove the role and security group
 ```
 
-For SF100 use `-var scale_factor=100 -var chunks=10`. Runner state is local and
-throwaway; the data root's state is worth keeping, so give it a backend before
-sharing it.
+For SF100 use `just s3-load 100 10` (ten chunks). `just s3-run '<command>'` runs any
+command on a runner instead, with `$RESULTS_DIR` uploaded at the end. The runner
+clones the commit you have checked out, so push it first; the recipe refuses an
+unpushed commit. One runner at a time: its variables live in
+`runner/run.auto.tfvars.json` (git-ignored) until `s3-runner-destroy`.
+
+Runner state is local and throwaway. The data root's state is worth keeping, so
+give it a backend before sharing it.
 
 ## Querying the views
 

@@ -24,7 +24,9 @@ vendors already build their semantic layers on (Snowflake's semantic view docs u
 | 100 | ~600M | ~30 GB |
 
 ```sh
-uv run demo-stacks generate --sf 10 --chunks 1 --out data/tpch_sf10
+just generate 10          # Parquet in data/tpch_sf10
+just local 1              # SF1 into data/tpch_sf1.duckdb with the semantic views
+just local-query 1        # a sample semantic view query against it
 ```
 
 `--chunks` generates in independent slices to bound memory (about one per 10 SF);
@@ -49,11 +51,11 @@ express, and the comments at the top of the file spell out its rules.
 | `generated/databricks/*.sql` | Databricks metric views (`WITH METRICS LANGUAGE YAML`) |
 | `generated/semolina/tpch_models.py` | Semolina `SemanticView` models, the same on every stack |
 
-Edit the YAML, run `demo-stacks render`, commit both; CI fails if they drift.
+Edit the YAML, run `just render`, commit both; CI fails if they drift.
 For tables somewhere else, print the DDL directly:
 
 ```sh
-uv run demo-stacks ddl databricks --schema my_catalog.tpch
+just ddl databricks my_catalog.tpch
 ```
 
 The DuckDB output is tested end to end: the tests generate SF0.01, create the
@@ -74,9 +76,12 @@ Nothing bills while idle except stored bytes. Each stack splits into:
 
 ## Development
 
+Everything runs through [`just`](https://just.systems/); `just` lists the recipes.
+You need `uv`, `terraform`, `just` and, for the AWS recipes, `jq` and the AWS CLI.
+
 ```sh
-uv sync
-uv run pytest
-uv run ruff format --check . && uv run ruff check .
-uv run demo-stacks render --check
+just setup     # uv sync
+just check     # what CI runs: lint, render-check, test, tf-validate
+just fmt       # ruff + terraform fmt
+just render    # rewrite generated/ after editing semantic/
 ```
