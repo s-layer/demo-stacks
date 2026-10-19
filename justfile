@@ -107,6 +107,10 @@ s3-data-destroy:
             echo "deleting $ns.$t"
             s3t delete-table --table-bucket-arn "$arn" --namespace "$ns" --name "$t"
         done
+        # Covers namespaces `load` created outside var.scale_factors, which Terraform
+        # doesn't know about; refresh drops the managed ones that are already gone.
+        echo "deleting namespace $ns"
+        s3t delete-namespace --table-bucket-arn "$arn" --namespace "$ns"
     done
     terraform -chdir={{ s3_stack }}/data destroy -auto-approve
 
