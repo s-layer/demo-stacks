@@ -13,16 +13,15 @@ SF10 in place and benchmarks can compare scales.
 
 from __future__ import annotations
 
+from demo_stacks import dataset
 from demo_stacks.render import sql_string
 
 CATALOG = "s3t"
 
 
 def namespace(scale_factor: float) -> str:
-    """The namespace holding TPC-H at ``scale_factor`` (whole numbers only)."""
-    if scale_factor <= 0 or scale_factor != int(scale_factor):
-        raise ValueError(f"S3 Tables namespaces need a whole scale factor, got {scale_factor}")
-    return f"tpch_sf{int(scale_factor)}"
+    """The namespace holding TPC-H at ``scale_factor``; see :func:`dataset.schema_name`."""
+    return dataset.schema_name(scale_factor)
 
 
 def schema(scale_factor: float) -> str:

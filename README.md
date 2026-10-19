@@ -6,7 +6,7 @@ dataset and semantic layer so the stacks can be compared like for like.
 | Stack | Query layer | Storage | Status |
 |---|---|---|---|
 | [`duckdb-s3tables`](stacks/duckdb-s3tables/) | semolina + [duckdb-semantic-views](https://github.com/s-layer/duckdb-semantic-views) | Amazon S3 Tables (Iceberg) | data + runner Terraform |
-| `databricks` | semolina + Databricks metric views | Databricks lakehouse | planned |
+| [`databricks-rt`](stacks/databricks-rt/) | Databricks metric views on Lakehouse//RT (semolina once it accepts `DatabricksPythonConfig`) | Unity Catalog managed Delta tables | data Terraform + loader, not yet run |
 
 ## The shared layer
 
@@ -48,14 +48,14 @@ express, and the comments at the top of the file spell out its rules.
 |---|---|
 | `generated/duckdb/*.sql` | duckdb-semantic-views `CREATE SEMANTIC VIEW` (tables in `s3t.tpch_sf10`) |
 | `generated/snowflake/*.sql` | Snowflake `CREATE SEMANTIC VIEW` over `SNOWFLAKE_SAMPLE_DATA.TPCH_SF10` |
-| `generated/databricks/*.sql` | Databricks metric views (`WITH METRICS LANGUAGE YAML`) |
+| `generated/databricks/*.sql` | Databricks metric views (`WITH METRICS LANGUAGE YAML`) over `s_layer_demo.tpch_sf10` |
 | `generated/semolina/tpch_models.py` | Semolina `SemanticView` models, the same on every stack |
 
 Edit the YAML, run `just render`, commit both; CI fails if they drift.
 For tables somewhere else, print the DDL directly:
 
 ```sh
-just ddl databricks my_catalog.tpch
+just ddl databricks my_catalog.my_schema
 ```
 
 The DuckDB output is tested end to end: the tests generate SF0.01, create the
@@ -73,6 +73,7 @@ Nothing bills while idle except stored bytes. Each stack splits into:
 - **compute** that exists only while a job runs: a one-shot EC2 runner that does
   one job (load data, run a benchmark), uploads its results and terminates itself,
   with a hard time limit as a backstop.
+  On Databricks, compute is serverless warehouses that stop after a few idle minutes.
 
 ## Development
 

@@ -32,6 +32,19 @@ _ROWS_PER_SF = {
 _FIXED_ROWS = {"region": 5, "nation": 25}
 
 
+def schema_name(sf: float) -> str:
+    """
+    The schema (or namespace) that holds TPC-H at ``sf`` in a stack: ``tpch_sf<N>``.
+
+    Every stack keeps each scale factor in its own schema under this name, so loading
+    SF100 leaves SF10 in place and benchmarks compare like with like across stacks.
+    Only whole scale factors have a name.
+    """
+    if sf <= 0 or sf != int(sf):
+        raise ValueError(f"stack schemas need a whole scale factor, got {sf}")
+    return f"tpch_sf{int(sf)}"
+
+
 def expected_rows(sf: float) -> dict[str, int]:
     """Exact row counts the TPC-H spec fixes for scale factor ``sf`` (all but lineitem)."""
     return {**_FIXED_ROWS, **{t: round(n * sf) for t, n in _ROWS_PER_SF.items()}}

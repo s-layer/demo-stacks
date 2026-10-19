@@ -3,7 +3,8 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 s3_stack := "stacks/duckdb-s3tables"
-tf_roots := "stacks/duckdb-s3tables/data stacks/duckdb-s3tables/runner"
+dbx_stack := "stacks/databricks-rt"
+tf_roots := "stacks/duckdb-s3tables/data stacks/duckdb-s3tables/runner stacks/databricks-rt/data"
 
 # List recipes
 default:
@@ -171,3 +172,40 @@ _s3-run run_id job_json:
     terraform -chdir={{ s3_stack }}/runner init -input=false >/dev/null
     terraform -chdir={{ s3_stack }}/runner apply
     echo "launched {{ run_id }}; follow it with 'just s3-runner-status'"
+
+# --- stack 2: Databricks Lakehouse//RT -------------------------------------------
+# These create real AWS and Databricks resources. They use your current AWS
+# credentials, DATABRICKS_HOST and DATABRICKS_TOKEN, and TF_VAR_databricks_account_id.
+
+# Plan the long-lived data root (bucket, storage credential, catalog, schemas, loader warehouse)
+dbx-data-plan:
+    terraform -chdir={{ dbx_stack }}/data init -input=false >/dev/null
+    terraform -chdir={{ dbx_stack }}/data plan
+
+# Create or update the data root
+dbx-data-apply:
+    terraform -chdir={{ dbx_stack }}/data init -input=false >/dev/null
+    terraform -chdir={{ dbx_stack }}/data apply
+
+# Destroy the data root, including the catalog's tables and the bucket
+dbx-data-destroy:
+    terraform -chdir={{ dbx_stack }}/data destroy
+
+# Upload data/tpch_sf<sf> to the staging prefix (generates first if missing)
+dbx-stage sf="1" chunks="1":
+    [ -d data/tpch_sf{{ sf }} ] || just generate {{ sf }} {{ chunks }}
+    aws s3 sync --delete data/tpch_sf{{ sf }} \
+        "$(terraform -chdir={{ dbx_stack }}/data output -raw staging_uri)/tpch_sf{{ sf }}/"
+
+# Load staged scale factor `sf` into the catalog and create its metric views, on the loader warehouse
+dbx-load sf="1":
+    uv run demo-stacks dbx-load --sf {{ sf }} \
+        --staging "$(terraform -chdir={{ dbx_stack }}/data output -raw staging_uri)" \
+        --catalog "$(terraform -chdir={{ dbx_stack }}/data output -raw catalog)" \
+        --http-path "$(terraform -chdir={{ dbx_stack }}/data output -raw loader_http_path)"
+
+# Run the sample metric view query (or `sql`) on the warehouse at `http_path`, e.g. the RT one
+dbx-query http_path sf="1" sql="":
+    uv run demo-stacks dbx-query --sf {{ sf }} --http-path {{ quote(http_path) }} \
+        --catalog "$(terraform -chdir={{ dbx_stack }}/data output -raw catalog)" \
+        {{ if sql == "" { "" } else { "--sql " + quote(sql) } }}

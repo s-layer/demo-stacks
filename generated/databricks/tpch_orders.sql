@@ -1,21 +1,21 @@
-CREATE OR REPLACE VIEW s_layer_demo.tpch.tpch_orders
+CREATE OR REPLACE VIEW s_layer_demo.tpch_sf10.tpch_orders
 WITH METRICS
 LANGUAGE YAML
 AS $$
 version: 1.1
 comment: Orders and order value by customer and geography.
-source: s_layer_demo.tpch.orders
+source: s_layer_demo.tpch_sf10.orders
 joins:
 - name: c
-  source: s_layer_demo.tpch.customer
+  source: s_layer_demo.tpch_sf10.customer
   'on': source.o_custkey = c.c_custkey
   joins:
   - name: n
-    source: s_layer_demo.tpch.nation
+    source: s_layer_demo.tpch_sf10.nation
     'on': c.c_nationkey = n.n_nationkey
     joins:
     - name: r
-      source: s_layer_demo.tpch.region
+      source: s_layer_demo.tpch_sf10.region
       'on': n.n_regionkey = r.r_regionkey
 dimensions:
 - name: order_date

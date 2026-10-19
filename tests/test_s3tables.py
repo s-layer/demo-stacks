@@ -16,7 +16,7 @@ def test_each_scale_factor_has_its_own_namespace() -> None:
 
 @pytest.mark.parametrize("sf", [0, -1, 0.5, 1.5])
 def test_fractional_or_non_positive_scale_factors_are_rejected(sf: float) -> None:
-    with pytest.raises(ValueError, match="whole scale factor"):
+    with pytest.raises(ValueError, match="whole scale factor, got"):
         s3tables.namespace(sf)
 
 
