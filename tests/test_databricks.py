@@ -252,3 +252,10 @@ def test_dbx_query_runs_the_sample_by_default(
     assert capsys.readouterr().out == "row\n"
     assert cli.main([*argv, "--sql", "SELECT 1"]) == 0
     assert cursor.sql[-1] == "SELECT 1"
+
+
+def test_the_kernel_backend_is_installed() -> None:
+    """``use_kernel=True`` fails at connect time without the connector's ``[kernel]`` extra."""
+    import importlib.util
+
+    assert importlib.util.find_spec("databricks_sql_kernel") is not None
