@@ -9,6 +9,7 @@ slice ``i`` of every table and the slices together are exactly the full dataset.
 
 from __future__ import annotations
 
+import shutil
 from typing import TYPE_CHECKING
 
 import duckdb
@@ -42,7 +43,10 @@ def generate(sf: float, out_dir: Path, *, chunks: int = 1) -> dict[str, int]:
 
     Args:
         sf: TPC-H scale factor. SF1 is about 1 GB raw, 6M lineitem rows.
-        out_dir: Destination; one directory per table, one file per chunk.
+        out_dir: Destination; one directory per table, one file per chunk. Any
+            existing contents are replaced, and only once every slice is written and
+            the row counts check out: until then the data goes to a ``.partial``
+            sibling, so ``out_dir`` never holds a mix of runs or a half-written set.
         chunks: Number of independent slices to generate. Use more for large SFs
             (roughly one per 10 SF keeps a slice within a few GB of memory).
 
@@ -53,6 +57,8 @@ def generate(sf: float, out_dir: Path, *, chunks: int = 1) -> dict[str, int]:
         raise ValueError(f"scale factor must be positive, got {sf}")
     if chunks < 1:
         raise ValueError(f"chunks must be at least 1, got {chunks}")
+    partial = out_dir.with_name(out_dir.name + ".partial")
+    shutil.rmtree(partial, ignore_errors=True)
     counts: dict[str, int] = dict.fromkeys(TABLES, 0)
     for step in range(chunks):
         con = duckdb.connect()
@@ -64,7 +70,7 @@ def generate(sf: float, out_dir: Path, *, chunks: int = 1) -> dict[str, int]:
             else:
                 con.execute("CALL dbgen(sf = ?, children = ?, step = ?)", [sf, chunks, step])
             for table in TABLES:
-                dest = out_dir / table
+                dest = partial / table
                 dest.mkdir(parents=True, exist_ok=True)
                 path = dest / f"part-{step:05d}.parquet"
                 con.execute(f"COPY {table} TO '{path}' (FORMAT parquet, COMPRESSION zstd)")
@@ -72,6 +78,8 @@ def generate(sf: float, out_dir: Path, *, chunks: int = 1) -> dict[str, int]:
         finally:
             con.close()
     check_counts(sf, counts)
+    shutil.rmtree(out_dir, ignore_errors=True)
+    partial.rename(out_dir)
     return counts
 
 

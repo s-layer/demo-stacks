@@ -19,6 +19,9 @@ resource "aws_s3tables_namespace" "tpch" {
 # Runner logs and benchmark results.
 resource "aws_s3_bucket" "results" {
   bucket = "${var.name_prefix}-results-${data.aws_caller_identity.current.account_id}"
+  # Results are disposable (they also expire), and `just s3-data-destroy` is the
+  # explicit "delete everything" path.
+  force_destroy = true
 }
 
 resource "aws_s3_bucket_public_access_block" "results" {

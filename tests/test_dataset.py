@@ -84,3 +84,28 @@ def test_load_replaces_existing_tables(parquet_dir: Path) -> None:
     loaded = dataset.load(con, parquet_dir, schema="tpch", tables=["region"])
     assert loaded == {"region": 5}
     assert "r_name" in [c[0] for c in con.execute("DESCRIBE tpch.region").fetchall()]
+
+
+def test_regenerating_replaces_the_previous_run_only_on_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "tpch"
+
+    def parts() -> list[str]:
+        return sorted(p.name for p in (out / "lineitem").glob("*.parquet"))
+
+    dataset.generate(SF, out, chunks=3)
+    assert parts() == ["part-00000.parquet", "part-00001.parquet", "part-00002.parquet"]
+
+    def fail(sf: float, counts: dict[str, int]) -> None:
+        raise ValueError("interrupted")
+
+    with monkeypatch.context() as m:
+        m.setattr(dataset, "check_counts", fail)
+        with pytest.raises(ValueError, match="interrupted"):
+            dataset.generate(SF, out, chunks=2)
+    assert len(parts()) == 3, "a failed run must leave the previous data alone"
+
+    dataset.generate(SF, out)
+    assert parts() == ["part-00000.parquet"], "slices from the 3-chunk run must not survive"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["tpch"]

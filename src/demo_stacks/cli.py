@@ -44,16 +44,30 @@ def cmd_render(args: argparse.Namespace) -> int:
     defs = semantic.load(args.definitions)
     files = rendered_files(defs)
     stale = [p for p, text in files.items() if _read(args.out / p) != text]
+    # Files left behind by a renamed or removed view, in the directories render owns.
+    owned = {p.parent for p in files}
+    orphans = sorted(
+        f.relative_to(args.out)
+        for d in owned
+        if (args.out / d).is_dir()
+        for f in (args.out / d).iterdir()
+        if f.is_file() and f.relative_to(args.out) not in files
+    )
     if args.check:
         for p in stale:
             print(f"out of date: {args.out / p}", file=sys.stderr)
-        if stale:
+        for p in orphans:
+            print(f"no longer rendered: {args.out / p}", file=sys.stderr)
+        if stale or orphans:
             print("run `demo-stacks render` and commit the result", file=sys.stderr)
-        return 1 if stale else 0
+        return 1 if stale or orphans else 0
     for p in stale:
         (args.out / p).parent.mkdir(parents=True, exist_ok=True)
         (args.out / p).write_text(files[p])
         print(f"wrote {args.out / p}")
+    for p in orphans:
+        (args.out / p).unlink()
+        print(f"removed {args.out / p}")
     return 0
 
 

@@ -31,6 +31,18 @@ def test_render_check_flags_a_stale_file(tmp_path: Path, defs: semantic.Definiti
     assert cli.main(["render", "--out", str(tmp_path), "--check"]) == 1
 
 
+def test_render_removes_files_of_views_that_no_longer_exist(
+    tmp_path: Path, defs: semantic.Definitions
+) -> None:
+    assert cli.main(["render", "--out", str(tmp_path)]) == 0
+    orphan = tmp_path / "duckdb" / "tpch_renamed_away.sql"
+    orphan.write_text("-- from a view that was renamed\n")
+    assert cli.main(["render", "--out", str(tmp_path), "--check"]) == 1
+    assert cli.main(["render", "--out", str(tmp_path)]) == 0
+    assert not orphan.exists()
+    assert cli.main(["render", "--out", str(tmp_path), "--check"]) == 0
+
+
 class TestDuckDB:
     def test_tables_are_qualified_by_schema(self, defs: semantic.Definitions) -> None:
         ddl = render_duckdb.render(defs.view("tpch_orders"), schema="s3t.tpch")

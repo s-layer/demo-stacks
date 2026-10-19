@@ -49,9 +49,26 @@ data "aws_iam_policy_document" "assume" {
 }
 
 data "aws_iam_policy_document" "runner" {
+  # What DuckDB's iceberg extension needs to read, create, replace and drop tables
+  # through the S3 Tables endpoint. Deliberately absent: deleting namespaces or the
+  # bucket and changing bucket policies, since a `shell` job runs arbitrary code
+  # against the long-lived data root.
   statement {
-    sid       = "TableBucket"
-    actions   = ["s3tables:*"]
+    sid = "TableBucket"
+    actions = [
+      "s3tables:GetTableBucket",
+      "s3tables:ListNamespaces",
+      "s3tables:GetNamespace",
+      "s3tables:CreateNamespace",
+      "s3tables:ListTables",
+      "s3tables:GetTable",
+      "s3tables:CreateTable",
+      "s3tables:DeleteTable",
+      "s3tables:GetTableMetadataLocation",
+      "s3tables:UpdateTableMetadataLocation",
+      "s3tables:GetTableData",
+      "s3tables:PutTableData",
+    ]
     resources = [var.table_bucket_arn, "${var.table_bucket_arn}/*"]
   }
   statement {

@@ -93,7 +93,22 @@ s3-data-apply:
 
 # Destroy the data root, including all loaded tables and results
 s3-data-destroy:
-    terraform -chdir={{ s3_stack }}/data destroy
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # DuckDB creates the Iceberg tables outside Terraform, and S3 Tables will not
+    # delete a namespace that still holds tables, so drop them first.
+    data() { terraform -chdir={{ s3_stack }}/data output -raw "$1"; }
+    arn=$(data table_bucket_arn); region=$(data region)
+    read -r -p "Delete every table in $arn, then destroy the data root? Type yes: " answer
+    [ "$answer" = yes ] || { echo "aborted"; exit 1; }
+    s3t() { aws s3tables --region "$region" "$@"; }
+    for ns in $(s3t list-namespaces --table-bucket-arn "$arn" --query 'namespaces[].namespace[0]' --output text); do
+        for t in $(s3t list-tables --table-bucket-arn "$arn" --namespace "$ns" --query 'tables[].name' --output text); do
+            echo "deleting $ns.$t"
+            s3t delete-table --table-bucket-arn "$arn" --namespace "$ns" --name "$t"
+        done
+    done
+    terraform -chdir={{ s3_stack }}/data destroy -auto-approve
 
 # Launch a runner that generates TPC-H at `sf` and loads it into the table bucket
 s3-load sf="10" chunks="1" instance_type="r7i.2xlarge":
