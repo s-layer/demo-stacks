@@ -1,0 +1,204 @@
+name: CI
+
+on:
+  # Branch pushes are covered by the pull_request trigger, so main is the only branch
+  # needing a push run of its own.
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    name: Type check with basedpyright
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync dependencies
+        run: uv sync --locked --dev
+
+      - name: Run basedpyright
+        run: uv run basedpyright
+
+  lint:
+    name: Lint with ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync dependencies
+        run: uv sync --locked --dev
+
+      - name: Run ruff check
+        run: uv run ruff check --output-format=github
+
+  format:
+    name: Format check with ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync dependencies
+        run: uv sync --locked --dev
+
+      - name: Run ruff format
+        run: uv run ruff format --check
+
+  generated:
+    name: generated/ matches semantic/
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      - name: Check generated/ is up to date
+        run: uv run demo-stacks render --check
+
+  test:
+    name: Test with pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      # The coverage comment step writes to the PR. Forks get a read-only token
+      # regardless, which is why that step is continue-on-error.
+      pull-requests: write
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: ${{ matrix.python-version }}
+
+      - name: Sync dependencies
+        run: uv sync --locked --dev
+
+      # The tests install DuckDB's tpch and semantic_views extensions on first use.
+      # Doing it once up front keeps a download failure out of the test results.
+      - name: Warm DuckDB extension cache
+        run: |
+          uv run python -c "
+          import duckdb
+          con = duckdb.connect()
+          con.execute('INSTALL tpch')
+          con.execute('INSTALL semantic_views FROM community')
+          "
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest \
+            --cov=src/demo_stacks \
+            --cov-report=xml \
+            --cov-report=term
+
+      - name: Post coverage comment
+        if: github.event_name == 'pull_request' && matrix.python-version == '3.11'
+        continue-on-error: true
+        uses: MishaKav/pytest-coverage-comment@v1.12.3
+        with:
+          pytest-xml-coverage-path: coverage.xml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Prune cache
+        if: always()
+        run: uv cache prune --ci
+
+  terraform:
+    name: Terraform fmt and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    strategy:
+      matrix:
+        root:
+          - stacks/duckdb-s3tables/data
+          - stacks/duckdb-s3tables/runner
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        working-directory: ${{ matrix.root }}
+        run: terraform fmt -check -recursive
+
+      - name: terraform init
+        working-directory: ${{ matrix.root }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: ${{ matrix.root }}
+        run: terraform validate
