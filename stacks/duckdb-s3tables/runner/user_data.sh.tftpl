@@ -1,0 +1,39 @@
+#!/bin/bash
+# Runs once at first boot as root. Whatever happens, the instance powers off at
+# the end, and the shutdown behaviour terminates it.
+set -uo pipefail
+
+# Hard stop first, so a hung job cannot run up a bill.
+shutdown -h +${max_lifetime_minutes}
+
+export AWS_REGION='${region}'
+export TABLE_BUCKET_ARN='${table_bucket_arn}'
+export RESULTS_DIR=/data/results
+RUN_PREFIX='s3://${results_bucket}/runs/${run_id}'
+LOG=/data/results/runner.log
+
+mkdir -p /data/results
+exec > >(tee -a "$LOG") 2>&1
+
+finish() {
+  status=$?
+  echo "job exited with status $status"
+  echo "$status" > /data/results/exit_status
+  aws s3 cp --recursive --only-show-errors /data/results "$RUN_PREFIX/" || true
+  shutdown -h now
+}
+trap finish EXIT
+
+set -e
+dnf install -y -q git
+export HOME=/root
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+git clone --quiet '${repo_url}' /data/repo
+cd /data/repo
+git checkout --quiet '${repo_ref}'
+echo "demo-stacks at $(git rev-parse HEAD)"
+uv sync --no-dev
+
+${command}

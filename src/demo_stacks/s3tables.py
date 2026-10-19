@@ -3,7 +3,11 @@ Connect DuckDB to an Amazon S3 Tables bucket through the ``iceberg`` extension.
 
 Every DuckDB connection that queries the demo's semantic views needs these
 statements run first: the semantic views name their tables through the attached
-catalog (``s3t.tpch.lineitem``), and ``ATTACH`` does not persist in a database file.
+catalog (``s3t.tpch_sf10.lineitem``), and ``ATTACH`` does not persist in a database
+file.
+
+Each scale factor lives in its own namespace, ``tpch_sf<N>``, so loading SF100 leaves
+SF10 in place and benchmarks can compare scales.
 """
 
 from __future__ import annotations
@@ -11,8 +15,18 @@ from __future__ import annotations
 from demo_stacks.render import sql_string
 
 CATALOG = "s3t"
-NAMESPACE = "tpch"
-SCHEMA = f"{CATALOG}.{NAMESPACE}"
+
+
+def namespace(scale_factor: float) -> str:
+    """The namespace holding TPC-H at ``scale_factor`` (whole numbers only)."""
+    if scale_factor <= 0 or scale_factor != int(scale_factor):
+        raise ValueError(f"S3 Tables namespaces need a whole scale factor, got {scale_factor}")
+    return f"tpch_sf{int(scale_factor)}"
+
+
+def schema(scale_factor: float) -> str:
+    """``catalog.namespace`` for ``scale_factor``, as DuckDB names it once attached."""
+    return f"{CATALOG}.{namespace(scale_factor)}"
 
 
 def setup_sql(table_bucket_arn: str, *, region: str | None = None) -> list[str]:

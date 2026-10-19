@@ -1,15 +1,15 @@
 CREATE OR REPLACE SEMANTIC VIEW tpch_sales AS
 TABLES (
-    li AS s3t.tpch.lineitem PRIMARY KEY (l_orderkey, l_linenumber) COMMENT = 'One row per order line.',
-    o AS s3t.tpch.orders PRIMARY KEY (o_orderkey),
-    c AS s3t.tpch.customer PRIMARY KEY (c_custkey),
-    cn AS s3t.tpch.nation PRIMARY KEY (n_nationkey) COMMENT = 'The customer''s nation.',
-    cr AS s3t.tpch.region PRIMARY KEY (r_regionkey) COMMENT = 'The customer''s region.',
-    p AS s3t.tpch.part PRIMARY KEY (p_partkey),
-    s AS s3t.tpch.supplier PRIMARY KEY (s_suppkey),
-    sn AS s3t.tpch.nation PRIMARY KEY (n_nationkey) COMMENT = 'The supplier''s nation.',
-    sr AS s3t.tpch.region PRIMARY KEY (r_regionkey) COMMENT = 'The supplier''s region.',
-    ps AS s3t.tpch.partsupp PRIMARY KEY (ps_partkey, ps_suppkey)
+    li AS s3t.tpch_sf10.lineitem PRIMARY KEY (l_orderkey, l_linenumber) COMMENT = 'One row per order line.',
+    o AS s3t.tpch_sf10.orders PRIMARY KEY (o_orderkey),
+    c AS s3t.tpch_sf10.customer PRIMARY KEY (c_custkey),
+    cn AS s3t.tpch_sf10.nation PRIMARY KEY (n_nationkey) COMMENT = 'The customer''s nation.',
+    cr AS s3t.tpch_sf10.region PRIMARY KEY (r_regionkey) COMMENT = 'The customer''s region.',
+    p AS s3t.tpch_sf10.part PRIMARY KEY (p_partkey),
+    s AS s3t.tpch_sf10.supplier PRIMARY KEY (s_suppkey),
+    sn AS s3t.tpch_sf10.nation PRIMARY KEY (n_nationkey) COMMENT = 'The supplier''s nation.',
+    sr AS s3t.tpch_sf10.region PRIMARY KEY (r_regionkey) COMMENT = 'The supplier''s region.',
+    ps AS s3t.tpch_sf10.partsupp PRIMARY KEY (ps_partkey, ps_suppkey)
 )
 RELATIONSHIPS (
     line_order AS li(l_orderkey) REFERENCES o,

@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - name: generated/ matches semantic/
+        run: uv run demo-stacks render --check
+      - run: uv run pytest
+
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        root: [stacks/duckdb-s3tables/data, stacks/duckdb-s3tables/runner]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive
+        working-directory: ${{ matrix.root }}
+      - run: terraform init -backend=false -input=false
+        working-directory: ${{ matrix.root }}
+      - run: terraform validate
+        working-directory: ${{ matrix.root }}

@@ -15,7 +15,7 @@ GENERATED = semantic.REPO_ROOT / "generated"
 # Where each warehouse's tables live in the committed renders. `demo-stacks ddl`
 # renders for any other location.
 DEFAULT_SCHEMAS = {
-    "duckdb": s3tables.SCHEMA,
+    "duckdb": s3tables.schema(10),
     "snowflake": "SNOWFLAKE_SAMPLE_DATA.TPCH_SF10",
     "databricks": "s_layer_demo.tpch",
 }
@@ -73,13 +73,15 @@ def cmd_generate(args: argparse.Namespace) -> int:
 def cmd_load(args: argparse.Namespace) -> int:
     import duckdb as ddb
 
+    if args.s3_tables_arn and args.scale_factor is None:
+        raise SystemExit("load --s3-tables-arn needs --scale-factor to pick a namespace")
     defs = semantic.load(args.definitions)
     con = ddb.connect(str(args.database))
     try:
         if args.s3_tables_arn:
             for stmt in s3tables.setup_sql(args.s3_tables_arn, region=args.region):
                 con.execute(stmt)
-            schema = s3tables.SCHEMA
+            schema = s3tables.schema(args.scale_factor)
         else:
             schema = args.schema
         if not args.views_only:
@@ -126,6 +128,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--schema", default="tpch", help="schema for local tables")
     p.add_argument("--s3-tables-arn", help="load into this S3 Tables bucket instead")
     p.add_argument("--region", help="AWS region of the table bucket")
+    p.add_argument(
+        "--scale-factor",
+        "--sf",
+        type=float,
+        help="with --s3-tables-arn: load into namespace tpch_sf<N>",
+    )
     p.add_argument("--views-only", action="store_true", help="skip loading, create views only")
     p.set_defaults(func=cmd_load)
 

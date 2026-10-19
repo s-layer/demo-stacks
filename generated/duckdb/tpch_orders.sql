@@ -1,9 +1,9 @@
 CREATE OR REPLACE SEMANTIC VIEW tpch_orders AS
 TABLES (
-    o AS s3t.tpch.orders PRIMARY KEY (o_orderkey) COMMENT = 'One row per order.',
-    c AS s3t.tpch.customer PRIMARY KEY (c_custkey),
-    n AS s3t.tpch.nation PRIMARY KEY (n_nationkey),
-    r AS s3t.tpch.region PRIMARY KEY (r_regionkey)
+    o AS s3t.tpch_sf10.orders PRIMARY KEY (o_orderkey) COMMENT = 'One row per order.',
+    c AS s3t.tpch_sf10.customer PRIMARY KEY (c_custkey),
+    n AS s3t.tpch_sf10.nation PRIMARY KEY (n_nationkey),
+    r AS s3t.tpch_sf10.region PRIMARY KEY (r_regionkey)
 )
 RELATIONSHIPS (
     order_customer AS o(o_custkey) REFERENCES c,
