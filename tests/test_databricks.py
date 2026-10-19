@@ -259,3 +259,59 @@ def test_the_kernel_backend_is_installed() -> None:
     import importlib.util
 
     assert importlib.util.find_spec("databricks_sql_kernel") is not None
+
+
+def test_semolina_sample_is_the_sample_query(defs: semantic.Definitions) -> None:
+    sql = dbx.semolina_sample(cli.load_models(defs)).to_sql("databricks")
+    assert sql == (
+        "SELECT MEASURE(`net_revenue`) AS `net_revenue`, MEASURE(`profit`) AS `profit`, "
+        "`customer_region` AS `customer_region`, `order_year` AS `order_year`\n"
+        "FROM `tpch_sales`\nGROUP BY ALL\n"
+        "ORDER BY `customer_region` ASC, `order_year` ASC"
+    )
+
+
+def test_semolina_engine_defaults_to_the_scale_factor_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import semolina
+
+    seen: list[tuple[Any, Any]] = []
+
+    def create_engine(cfg: Any, *, register: Any) -> None:
+        seen.append((cfg, register))
+
+    monkeypatch.setattr(semolina, "create_engine", create_engine)
+    monkeypatch.setenv("DATABRICKS_HOST", "dbc-1.cloud.databricks.com")
+    dbx.semolina_engine("/sql/1.0/warehouses/rt", "cat", 10)
+    ((cfg, register),) = seen
+    assert isinstance(cfg, adbc_poolhouse.DatabricksPythonConfig)
+    assert (cfg.http_path, cfg.catalog, cfg.schema_) == (
+        "/sql/1.0/warehouses/rt",
+        "cat",
+        "tpch_sf10",
+    )
+    assert register is True
+
+
+def test_dbx_query_semolina_runs_the_models(
+    monkeypatch: pytest.MonkeyPatch, warehouse: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The CLI path end to end, with DuckDB standing in for the RT warehouse."""
+    import semolina
+    from adbc_poolhouse import DuckDBConfig
+
+    def engine(http_path: str, catalog: str, sf: float) -> Any:
+        assert (http_path, catalog, sf) == ("/sql/1.0/warehouses/rt", "cat", 1)
+        return semolina.create_engine(
+            DuckDBConfig(database=str(warehouse), read_only=True, pool_size=1), register=True
+        )
+
+    monkeypatch.setattr(dbx, "semolina_engine", engine)
+    argv = ["dbx-query", "--sf", "1", "--catalog", "cat", "--http-path", "/sql/1.0/warehouses/rt"]
+    assert cli.main([*argv, "--semolina"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 5 * 7, "five regions by seven order years"
+    revenue, profit, region, year = lines[0].split("\t")
+    assert (region, year) == ("AFRICA", "1992")
+    assert float(revenue) > float(profit) > 0

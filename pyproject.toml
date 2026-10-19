@@ -20,6 +20,7 @@ dependencies = [
 databricks = [
     "adbc-poolhouse[databricks-python]>=1.6.4",
     "databricks-sql-connector[kernel,pyarrow]>=4.6",
+    "semolina>=0.7.0",
 ]
 
 [project.scripts]
@@ -36,6 +37,11 @@ dev = [
     "semolina[duckdb]>=0.7.0",
     "types-pyyaml>=6",
 ]
+
+[tool.uv.sources]
+# DatabricksPythonConfig support (s-layer/semolina#69) isn't in a release yet.
+# Drop this pin, and raise the semolina floors, once a release carries it.
+semolina = { git = "https://github.com/s-layer/semolina", rev = "60b17851390cb2955db2b170351ce52c62636960" }
 
 [build-system]
 requires = ["hatchling>=1.25"]

@@ -435,6 +435,7 @@ dependencies = [
 databricks = [
     { name = "adbc-poolhouse", extra = ["databricks-python"] },
     { name = "databricks-sql-connector", extra = ["kernel", "pyarrow"] },
+    { name = "semolina" },
 ]
 
 [package.dev-dependencies]
@@ -456,6 +457,7 @@ requires-dist = [
     { name = "duckdb", specifier = "==1.5.6" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6" },
+    { name = "semolina", marker = "extra == 'databricks'", git = "https://github.com/s-layer/semolina?rev=60b17851390cb2955db2b170351ce52c62636960" },
 ]
 provides-extras = ["databricks"]
 
@@ -467,7 +469,7 @@ dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.15" },
-    { name = "semolina", extras = ["duckdb"], specifier = ">=0.7.0" },
+    { name = "semolina", extras = ["duckdb"], git = "https://github.com/s-layer/semolina?rev=60b17851390cb2955db2b170351ce52c62636960" },
     { name = "types-pyyaml", specifier = ">=6" },
 ]
 
@@ -1265,13 +1267,9 @@ wheels = [
 [[package]]
 name = "semolina"
 version = "0.7.0"
-source = { registry = "https://pypi.org/simple" }
+source = { git = "https://github.com/s-layer/semolina?rev=60b17851390cb2955db2b170351ce52c62636960#60b17851390cb2955db2b170351ce52c62636960" }
 dependencies = [
     { name = "adbc-poolhouse" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/8a/b8/6fcb707aa040e2b76f1102b4f841c39ef3a97f50f96acd84e88765aa18ae/semolina-0.7.0.tar.gz", hash = "sha256:25cd2e942e1509f6ce358c2bc95fbfe785a88423728d104233121d6a0ddbd41a", size = 217830, upload-time = "2026-10-16T19:11:55.727Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/8a/c1/ff63d3552099e3f8ec64ae7c19ac15fb514e7ecfd43b3e004e332cbfab2e/semolina-0.7.0-py3-none-any.whl", hash = "sha256:3eacffa0a4d48a9bbd92f7f0012a00f60dfe23f0cd5fd51f1d59bbec137f3347", size = 241665, upload-time = "2026-10-16T19:11:54.128Z" },
 ]
 
 [package.optional-dependencies]

@@ -6,7 +6,7 @@ dataset and semantic layer so the stacks can be compared like for like.
 | Stack | Query layer | Storage | Status |
 |---|---|---|---|
 | [`duckdb-s3tables`](stacks/duckdb-s3tables/) | semolina + [duckdb-semantic-views](https://github.com/s-layer/duckdb-semantic-views) | Amazon S3 Tables (Iceberg) | data + runner Terraform |
-| [`databricks-rt`](stacks/databricks-rt/) | Databricks metric views on Lakehouse//RT (semolina once it accepts `DatabricksPythonConfig`) | Unity Catalog managed Delta tables | data Terraform + loader, not yet run |
+| [`databricks-rt`](stacks/databricks-rt/) | semolina + Databricks metric views on Lakehouse//RT | Unity Catalog managed Delta tables | data Terraform + loader, not yet run |
 
 ## The shared layer
 

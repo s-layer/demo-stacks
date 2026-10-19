@@ -79,10 +79,27 @@ FROM s_layer_demo.tpch_sf1.tpch_sales
 GROUP BY ALL ORDER BY ALL
 ```
 
-Semolina can't target RT yet. `create_engine` accepts the ADBC `DatabricksConfig`
-but not `DatabricksPythonConfig`, and RT rejects the ADBC driver's Thrift
-connection. The Semolina models in `generated/semolina/` will work here unchanged
-once semolina accepts that config.
+The same query through the generated semolina models in `generated/semolina/`:
+
+```sh
+just dbx-semolina /sql/1.0/warehouses/<rt-id> 1
+```
+
+```python
+from demo_stacks import cli, databricks as dbx
+
+models = cli.load_models()
+with dbx.semolina_engine("/sql/1.0/warehouses/<rt-id>", "s_layer_demo", 1):
+    sales = models.TpchSales
+    query = sales.query().metrics(sales.net_revenue).dimensions(sales.customer_region)
+    with query.execute() as result:
+        rows = result.fetchall_rows()
+```
+
+`semolina_engine` builds a `DatabricksPythonConfig` whose default catalog and schema
+are `s_layer_demo.tpch_sf<N>`, so the models' unqualified view names resolve there.
+Semolina support for this config is on semolina's main branch but not yet released,
+so `pyproject.toml` pins semolina to that commit until a release carries it.
 
 ## Not yet verified
 
@@ -91,7 +108,9 @@ Nothing in this stack has run against a workspace yet:
 - the metric view YAML (nested joins, inlined facts, `MEASURE()` in derived
   measures);
 - `CLUSTER BY AUTO` on CTAS, and that `DEEP CLONE` carries it to the live table;
-- whether RT serves metric views over these tables as its docs say.
+- whether RT serves metric views over these tables as its docs say;
+- semolina's queries on RT. Until adbc-poolhouse translates this connector's
+  errors, a failure shows up as the raw `databricks-sql-connector` error.
 
 The tests check the SQL this stack sends and the shape of the DDL, not
 Databricks' response to it.
