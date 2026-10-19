@@ -10,11 +10,14 @@ definition.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DEFINITIONS = REPO_ROOT / "semantic" / "tpch.yaml"

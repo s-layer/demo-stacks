@@ -91,7 +91,7 @@ def definition(view: SemanticView, *, schema: str | None = None) -> dict[str, An
     out["dimensions"] = [_item(d.name, expr(d.expr), d.description) for d in view.dimensions]
 
     metric_names = {m.name for m in view.metrics}
-    measures = []
+    measures: list[dict[str, str]] = []
     for m in view.metrics:
         if m.derived:
             text = rewrite(m.expr, bare=lambda n: f"MEASURE({n})" if n in metric_names else n)

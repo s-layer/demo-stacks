@@ -1,0 +1,35 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      python-uv:
+        patterns:
+          - "*"
+    ignore:
+      # duckdb is pinned to a release the semantic_views community extension has a
+      # build for; a bump without a matching extension build breaks every test.
+      - dependency-name: "duckdb"
+
+  - package-ecosystem: "terraform"
+    directories:
+      - "/stacks/duckdb-s3tables/data"
+      - "/stacks/duckdb-s3tables/runner"
+    schedule:
+      interval: "weekly"
+    groups:
+      terraform:
+        patterns:
+          - "*"

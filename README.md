@@ -77,11 +77,13 @@ Nothing bills while idle except stored bytes. Each stack splits into:
 ## Development
 
 Everything runs through [`just`](https://just.systems/); `just` lists the recipes.
-You need `uv`, `terraform`, `just` and, for the AWS recipes, `jq` and the AWS CLI.
+You need `uv`, `terraform`, `just`, [`prek`](https://github.com/j178/prek) for the
+git hooks and, for the AWS recipes, `jq` and the AWS CLI.
 
 ```sh
-just setup     # uv sync
-just check     # what CI runs: lint, render-check, test, tf-validate
+just setup     # uv sync + prek install
+just check     # what CI runs: lint, typecheck, render-check, test, tf-validate
+just prek      # every pre-commit hook on every file
 just fmt       # ruff + terraform fmt
 just render    # rewrite generated/ after editing semantic/
 ```

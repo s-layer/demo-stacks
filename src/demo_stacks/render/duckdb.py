@@ -30,10 +30,10 @@ def statements(view: SemanticView, *, schema: str | None = None, replace: bool =
             Iceberg catalog. ``None`` leaves tables unqualified.
         replace: Emit ``CREATE OR REPLACE`` so re-running the DDL is idempotent.
     """
-    return _statements(view, schema=schema, replace=replace, snowflake=False)
+    return grammar_statements(view, schema=schema, replace=replace, snowflake=False)
 
 
-def _statements(
+def grammar_statements(
     view: SemanticView, *, schema: str | None, replace: bool, snowflake: bool
 ) -> list[str]:
     owner = {m.name: m.table for m in view.metrics}

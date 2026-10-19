@@ -37,8 +37,9 @@ give it a backend before sharing it.
 
 ## Querying the views
 
-A DuckDB connection needs the bucket attached before any semantic view query,
-because the views name `s3t.tpch_sf<N>.<table>` and `ATTACH` does not persist:
+A DuckDB process needs the bucket attached before any semantic view query, because
+the views name `s3t.tpch_sf<N>.<table>` and `ATTACH` is not saved in the database
+file:
 
 ```python
 import duckdb
@@ -56,9 +57,25 @@ con.sql(
 `demo-stacks load` creates the views in the `--database` file (the runner keeps it
 as `views.duckdb` in its results).
 
-Semolina's DuckDB engine runs only `LOAD semantic_views` on each new pooled
-connection, so it cannot attach the bucket yet; running semolina on this stack
-needs a per-connection setup hook there first.
+With semolina, run the same statements once after building the engine and commit
+them. Every pooled connection opens the same DuckDB database, and extensions, secrets
+and attached catalogs belong to the database, so one run covers the whole pool:
+
+```python
+from adbc_poolhouse import DuckDBConfig
+from semolina import create_engine
+from demo_stacks import s3tables
+
+engine = create_engine(DuckDBConfig(database="views.duckdb"), register=True)
+with engine.connect() as conn:
+    with conn.cursor() as cur:
+        for stmt in s3tables.setup_sql(table_bucket_arn, region="eu-west-2"):
+            cur.execute(stmt)
+    conn.commit()  # without this, the pool's rollback undoes the ATTACH
+```
+
+Semolina loads `semantic_views` itself. See semolina's backends how-to, "Attach
+catalogs and create secrets at startup".
 
 ## Not yet verified against AWS
 

@@ -9,10 +9,13 @@ slice ``i`` of every table and the slices together are exactly the full dataset.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import duckdb
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from pathlib import Path
 
 TABLES = ("region", "nation", "supplier", "customer", "part", "partsupp", "orders", "lineitem")
 
@@ -50,7 +53,7 @@ def generate(sf: float, out_dir: Path, *, chunks: int = 1) -> dict[str, int]:
         raise ValueError(f"scale factor must be positive, got {sf}")
     if chunks < 1:
         raise ValueError(f"chunks must be at least 1, got {chunks}")
-    counts = dict.fromkeys(TABLES, 0)
+    counts: dict[str, int] = dict.fromkeys(TABLES, 0)
     for step in range(chunks):
         con = duckdb.connect()
         try:
@@ -99,7 +102,7 @@ def load(
     """
     con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
     base = str(parquet_dir).rstrip("/")
-    loaded = {}
+    loaded: dict[str, int] = {}
     for table in tables:
         con.execute(f"DROP TABLE IF EXISTS {schema}.{table}")
         con.execute(

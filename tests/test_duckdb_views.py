@@ -9,16 +9,31 @@ the YAML or the renderer shows up as a mismatch.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
 import duckdb
 import pytest
 
+from demo_stacks import dataset
 from demo_stacks.render import duckdb as render_duckdb
 
 from .conftest import load_semantic_views
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def semantic_view(con, view: str, dimensions: list[str], metrics: list[str], where=None):
+    from demo_stacks import semantic
+
+Rows = list[tuple[Any, ...]]
+
+
+def semantic_view(
+    con: duckdb.DuckDBPyConnection,
+    view: str,
+    dimensions: list[str],
+    metrics: list[str],
+    where: str | None = None,
+) -> Rows:
     args = [f"dimensions := {dimensions!r}", f"metrics := {metrics!r}"]
     if where:
         args.append(f"where_clause := '{where.replace(chr(39), chr(39) * 2)}'")
@@ -27,11 +42,11 @@ def semantic_view(con, view: str, dimensions: list[str], metrics: list[str], whe
     return normalise(con.execute(f"SELECT {cols} FROM ({sql}) ORDER BY ALL").fetchall())
 
 
-def oracle(con, sql: str):
+def oracle(con: duckdb.DuckDBPyConnection, sql: str) -> Rows:
     return normalise(con.execute(f"SELECT * FROM ({sql}) ORDER BY ALL").fetchall())
 
 
-def normalise(rows):
+def normalise(rows: Rows) -> Rows:
     """Round numbers so DECIMAL and DOUBLE results of the same value compare equal."""
     return [
         tuple(round(float(v), 4) if isinstance(v, float | Decimal) else v for v in row)
@@ -39,7 +54,7 @@ def normalise(rows):
     ]
 
 
-def test_pricing_summary_matches_tpch_q1(con):
+def test_pricing_summary_matches_tpch_q1(con: duckdb.DuckDBPyConnection) -> None:
     got = semantic_view(
         con,
         "tpch_sales",
@@ -72,7 +87,7 @@ def test_pricing_summary_matches_tpch_q1(con):
     assert got == want
 
 
-def test_revenue_by_customer_region_and_year(con):
+def test_revenue_by_customer_region_and_year(con: duckdb.DuckDBPyConnection) -> None:
     got = semantic_view(
         con, "tpch_sales", ["customer_region", "order_year"], ["net_revenue", "order_count"]
     )
@@ -93,7 +108,7 @@ def test_revenue_by_customer_region_and_year(con):
     assert got == want
 
 
-def test_customer_and_supplier_nation_are_different_roles(con):
+def test_customer_and_supplier_nation_are_different_roles(con: duckdb.DuckDBPyConnection) -> None:
     """The two nation aliases must follow their own relationships, not each other's."""
     got = semantic_view(con, "tpch_sales", ["customer_nation", "supplier_nation"], ["line_count"])
     want = oracle(
@@ -113,7 +128,7 @@ def test_customer_and_supplier_nation_are_different_roles(con):
     assert got == want
 
 
-def test_profit_matches_tpch_q9_shape(con):
+def test_profit_matches_tpch_q9_shape(con: duckdb.DuckDBPyConnection) -> None:
     got = semantic_view(
         con, "tpch_sales", ["supplier_nation", "order_year"], ["supply_cost", "profit"]
     )
@@ -134,7 +149,7 @@ def test_profit_matches_tpch_q9_shape(con):
     assert got == want
 
 
-def test_part_and_ship_dimensions(con):
+def test_part_and_ship_dimensions(con: duckdb.DuckDBPyConnection) -> None:
     got = semantic_view(con, "tpch_sales", ["part_brand", "ship_mode", "ship_year"], ["quantity"])
     want = oracle(
         con,
@@ -147,7 +162,7 @@ def test_part_and_ship_dimensions(con):
     assert got == want
 
 
-def test_orders_view_by_segment_and_month(con):
+def test_orders_view_by_segment_and_month(con: duckdb.DuckDBPyConnection) -> None:
     got = semantic_view(
         con,
         "tpch_orders",
@@ -167,7 +182,7 @@ def test_orders_view_by_segment_and_month(con):
     assert got == want
 
 
-def test_orders_view_geography(con):
+def test_orders_view_geography(con: duckdb.DuckDBPyConnection) -> None:
     got = semantic_view(con, "tpch_orders", ["customer_region", "customer_nation"], ["total_price"])
     want = oracle(
         con,
@@ -185,7 +200,9 @@ def test_orders_view_geography(con):
 
 
 @pytest.mark.parametrize("view_name", ["tpch_sales", "tpch_orders"])
-def test_every_dimension_and_metric_is_queryable(con, defs, view_name):
+def test_every_dimension_and_metric_is_queryable(
+    con: duckdb.DuckDBPyConnection, defs: semantic.Definitions, view_name: str
+) -> None:
     view = defs.view(view_name)
     for d in view.dimensions:
         assert semantic_view(con, view_name, [d.name], []), d.name
@@ -193,18 +210,20 @@ def test_every_dimension_and_metric_is_queryable(con, defs, view_name):
         assert semantic_view(con, view_name, [], [m.name]), m.name
 
 
-def test_views_over_an_attached_catalog(tmp_path, parquet_dir, defs):
+def test_views_over_an_attached_catalog(
+    tmp_path: Path, parquet_dir: Path, defs: semantic.Definitions
+) -> None:
     """
     The S3 Tables layout: tables in an attached catalog, views in the main database.
 
     A second DuckDB file stands in for the Iceberg catalog. The views keep working
     after the main database is reopened, provided the catalog is attached again,
-    which is why every stack-1 connection runs `s3tables.setup_sql` first.
+    which is why a stack-1 process runs `s3tables.setup_sql` before querying.
     """
     lake, main = tmp_path / "lake.duckdb", tmp_path / "main.duckdb"
     con = duckdb.connect(str(main))
     con.execute(f"ATTACH '{lake}' AS lake")
-    dataset_load(con, parquet_dir)
+    dataset.load(con, parquet_dir, schema="lake.tpch")
     load_semantic_views(con)
     for view in defs.views:
         for stmt in render_duckdb.statements(view, schema="lake.tpch"):
@@ -225,9 +244,3 @@ def test_views_over_an_attached_catalog(tmp_path, parquet_dir, defs):
     assert len(want) == 5
     assert got == want
     con.close()
-
-
-def dataset_load(con, parquet_dir):
-    from demo_stacks import dataset
-
-    dataset.load(con, parquet_dir, schema="lake.tpch")

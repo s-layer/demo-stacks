@@ -1,10 +1,11 @@
 """
 Connect DuckDB to an Amazon S3 Tables bucket through the ``iceberg`` extension.
 
-Every DuckDB connection that queries the demo's semantic views needs these
-statements run first: the semantic views name their tables through the attached
-catalog (``s3t.tpch_sf10.lineitem``), and ``ATTACH`` does not persist in a database
-file.
+A DuckDB process that queries the demo's semantic views needs these statements run
+once first: the semantic views name their tables through the attached catalog
+(``s3t.tpch_sf10.lineitem``), and ``ATTACH`` is not saved in the database file. The
+attachment belongs to the database instance, so every connection to it (including
+every connection in a semolina pool) sees it.
 
 Each scale factor lives in its own namespace, ``tpch_sf<N>``, so loading SF100 leaves
 SF10 in place and benchmarks can compare scales.

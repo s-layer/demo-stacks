@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import duckdb
 import pytest
 
 from demo_stacks import dataset, semantic
 from demo_stacks.render import duckdb as render_duckdb
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
 
 # Small enough to generate in about a second, large enough that every dimension
 # has several members and every join is exercised.
@@ -26,7 +30,9 @@ def parquet_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 
 @pytest.fixture(scope="session")
-def warehouse(tmp_path_factory: pytest.TempPathFactory, parquet_dir: Path, defs) -> Path:
+def warehouse(
+    tmp_path_factory: pytest.TempPathFactory, parquet_dir: Path, defs: semantic.Definitions
+) -> Path:
     """A DuckDB file with the TPC-H tables in schema `tpch` and both semantic views."""
     path = tmp_path_factory.mktemp("wh") / "warehouse.duckdb"
     con = duckdb.connect(str(path))
@@ -40,7 +46,7 @@ def warehouse(tmp_path_factory: pytest.TempPathFactory, parquet_dir: Path, defs)
 
 
 @pytest.fixture
-def con(warehouse: Path):
+def con(warehouse: Path) -> Iterator[duckdb.DuckDBPyConnection]:
     c = duckdb.connect(str(warehouse), read_only=True)
     load_semantic_views(c)
     yield c

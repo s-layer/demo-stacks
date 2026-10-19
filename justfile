@@ -11,9 +11,14 @@ default:
 
 # --- development -----------------------------------------------------------------
 
-# Install the package and dev tools
+# Install the package and dev tools, and the prek git hooks
 setup:
     uv sync
+    command -v prek >/dev/null && prek install || echo "prek not found; skipping git hooks (uv tool install prek)"
+
+# Run every pre-commit hook on every file
+prek:
+    prek run --all-files
 
 # Format Python and Terraform
 fmt:
@@ -26,6 +31,10 @@ lint:
     uv run ruff format --check .
     uv run ruff check .
     terraform fmt -check -recursive stacks
+
+# Type-check with basedpyright (strict)
+typecheck:
+    uv run basedpyright
 
 # Run the test suite (pass pytest arguments through, e.g. `just test -k render`)
 test *args:
@@ -47,7 +56,7 @@ tf-validate:
     done
 
 # Everything CI runs
-check: lint render-check test tf-validate
+check: lint typecheck render-check test tf-validate
 
 # --- shared layer ----------------------------------------------------------------
 

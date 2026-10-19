@@ -9,6 +9,8 @@ from semolina import Dimension, Fact, Metric, SemanticView
 
 class TpchSales(SemanticView, view="tpch_sales"):
     """
+    The ``tpch_sales`` semantic view.
+
     Line-item sales: revenue, discounts, quantities and supplier profit by order, customer,
     part, supplier and geography.
     """
@@ -49,6 +51,8 @@ class TpchSales(SemanticView, view="tpch_sales"):
 
 class TpchOrders(SemanticView, view="tpch_orders"):
     """
+    The ``tpch_orders`` semantic view.
+
     Orders and order value by customer and geography.
     """
 

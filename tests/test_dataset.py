@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import duckdb
 import pytest
 
@@ -9,16 +11,27 @@ from demo_stacks import dataset
 
 from .conftest import SF
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def table_fingerprints(con, schema: str) -> dict[str, tuple]:
+
+def scalar(con: duckdb.DuckDBPyConnection, sql: str) -> Any:
+    row = con.execute(sql).fetchone()
+    assert row is not None
+    return row[0]
+
+
+def table_fingerprints(con: duckdb.DuckDBPyConnection, schema: str) -> dict[str, tuple[Any, ...]]:
     """Row count plus an order-independent hash of every row, per table."""
-    return {
-        t: con.execute(f"SELECT count(*), sum(hash(COLUMNS(*))) FROM {schema}.{t}").fetchone()
-        for t in dataset.TABLES
-    }
+    fingerprints: dict[str, tuple[Any, ...]] = {}
+    for t in dataset.TABLES:
+        row = con.execute(f"SELECT count(*), sum(hash(COLUMNS(*))) FROM {schema}.{t}").fetchone()
+        assert row is not None
+        fingerprints[t] = row
+    return fingerprints
 
 
-def test_expected_rows_follow_the_spec():
+def test_expected_rows_follow_the_spec() -> None:
     assert dataset.expected_rows(1) == {
         "region": 5,
         "nation": 25,
@@ -32,17 +45,17 @@ def test_expected_rows_follow_the_spec():
     assert dataset.expected_rows(0.29)["supplier"] == 2_900
 
 
-def test_generated_parquet_has_spec_row_counts(parquet_dir):
+def test_generated_parquet_has_spec_row_counts(parquet_dir: Path) -> None:
     con = duckdb.connect()
     counts = {
-        t: con.execute(f"SELECT count(*) FROM '{parquet_dir}/{t}/*.parquet'").fetchone()[0]
+        t: int(scalar(con, f"SELECT count(*) FROM '{parquet_dir}/{t}/*.parquet'"))
         for t in dataset.TABLES
     }
     dataset.check_counts(SF, counts)
     assert counts["lineitem"] > 5.9e6 * SF
 
 
-def test_chunked_generation_equals_single_pass(tmp_path, parquet_dir):
+def test_chunked_generation_equals_single_pass(tmp_path: Path, parquet_dir: Path) -> None:
     dataset.generate(SF, tmp_path, chunks=3)
     assert len(list((tmp_path / "lineitem").glob("*.parquet"))) == 3
     con = duckdb.connect()
@@ -51,7 +64,7 @@ def test_chunked_generation_equals_single_pass(tmp_path, parquet_dir):
     assert table_fingerprints(con, "chunked") == table_fingerprints(con, "single")
 
 
-def test_check_counts_rejects_a_short_table():
+def test_check_counts_rejects_a_short_table() -> None:
     counts = dataset.expected_rows(SF) | {"lineitem": 1}
     counts["orders"] -= 1
     with pytest.raises(ValueError, match="orders: got 14999, expected 15000"):
@@ -59,12 +72,12 @@ def test_check_counts_rejects_a_short_table():
 
 
 @pytest.mark.parametrize(("sf", "chunks"), [(0, 1), (-1, 1), (1, 0)])
-def test_generate_rejects_bad_arguments(tmp_path, sf, chunks):
+def test_generate_rejects_bad_arguments(tmp_path: Path, sf: float, chunks: int) -> None:
     with pytest.raises(ValueError):
         dataset.generate(sf, tmp_path, chunks=chunks)
 
 
-def test_load_replaces_existing_tables(parquet_dir):
+def test_load_replaces_existing_tables(parquet_dir: Path) -> None:
     con = duckdb.connect()
     con.execute("CREATE SCHEMA tpch")
     con.execute("CREATE TABLE tpch.region AS SELECT 1 AS stale")

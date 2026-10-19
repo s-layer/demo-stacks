@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from demo_stacks import dataset, s3tables, semantic
 from demo_stacks.render import databricks, duckdb, semolina, snowflake
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 GENERATED = semantic.REPO_ROOT / "generated"
 

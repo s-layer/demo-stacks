@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from demo_stacks.render.duckdb import _statements
-from demo_stacks.semantic import SemanticView
+from typing import TYPE_CHECKING
+
+from demo_stacks.render.duckdb import grammar_statements
+
+if TYPE_CHECKING:
+    from demo_stacks.semantic import SemanticView
 
 
 def render(view: SemanticView, *, schema: str | None = None, replace: bool = True) -> str:
@@ -17,5 +21,6 @@ def render(view: SemanticView, *, schema: str | None = None, replace: bool = Tru
         replace: Emit ``CREATE OR REPLACE``.
     """
     return "".join(
-        f"{stmt};\n" for stmt in _statements(view, schema=schema, replace=replace, snowflake=True)
+        f"{stmt};\n"
+        for stmt in grammar_statements(view, schema=schema, replace=replace, snowflake=True)
     )

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import yaml
@@ -11,7 +12,10 @@ from pydantic import ValidationError
 from demo_stacks import semantic
 from demo_stacks.semantic import bare_identifiers, qualified_refs, rewrite
 
-BASE = {
+if TYPE_CHECKING:
+    from pathlib import Path
+
+BASE: dict[str, Any] = {
     "name": "v",
     "tables": [
         {"alias": "o", "table": "orders", "primary_key": ["id"]},
@@ -32,20 +36,20 @@ BASE = {
 }
 
 
-def view(**changes):
+def view(**changes: Any) -> semantic.SemanticView:
     data = copy.deepcopy(BASE)
     data.update(changes)
     return semantic.SemanticView.model_validate(data)
 
 
-def test_base_view_is_valid():
+def test_base_view_is_valid() -> None:
     v = view()
     assert v.path("n") == ("c", "n")
     assert v.path("o") == ()
     assert v.derived_dependencies(v.metric("per_order")) == ("revenue", "orders")
 
 
-def test_repository_definitions_load():
+def test_repository_definitions_load() -> None:
     defs = semantic.load()
     assert [v.name for v in defs.views] == ["tpch_sales", "tpch_orders"]
 
@@ -133,52 +137,52 @@ def test_repository_definitions_load():
         ({"dimensions": [], "metrics": []}, "neither dimensions nor metrics"),
     ],
 )
-def test_invalid_views_are_rejected(changes, message):
+def test_invalid_views_are_rejected(changes: dict[str, Any], message: str) -> None:
     with pytest.raises(ValidationError) as exc:
         view(**changes)
     assert message in str(exc.value)
 
 
-def test_metric_may_use_another_tables_fact():
+def test_metric_may_use_another_tables_fact() -> None:
     v = view(metrics=[{"name": "w", "table": "o", "expr": "sum(n.nation_weight * o.qty)"}])
     assert v.metric("w").table == "o"
 
 
-def test_passthrough_fact_is_not_a_cycle():
+def test_passthrough_fact_is_not_a_cycle() -> None:
     view(facts=[{"name": "weight", "table": "n", "expr": "n.weight"}])
 
 
-def test_unknown_keys_are_rejected():
+def test_unknown_keys_are_rejected() -> None:
     with pytest.raises(ValidationError, match="extra"):
         view(colour="red")
 
 
-def test_duplicate_view_names_are_rejected():
+def test_duplicate_view_names_are_rejected() -> None:
     with pytest.raises(ValidationError, match="duplicate view 'v'"):
         semantic.Definitions.model_validate({"dataset": "d", "views": [BASE, BASE]})
 
 
-def test_load_reads_yaml(tmp_path):
+def test_load_reads_yaml(tmp_path: Path) -> None:
     path = tmp_path / "defs.yaml"
     path.write_text(yaml.safe_dump({"dataset": "d", "views": [BASE]}))
     assert semantic.load(path).view("v").root.alias == "o"
 
 
 class TestScanner:
-    def test_qualified_refs_skip_strings_and_quoted_identifiers(self):
+    def test_qualified_refs_skip_strings_and_quoted_identifiers(self) -> None:
         expr = """concat(o.a, 'o.b', "o.c", o.d)"""
         assert qualified_refs(expr) == [("o", "a"), ("o", "d")]
 
-    def test_bare_identifiers_exclude_functions_and_qualified_names(self):
+    def test_bare_identifiers_exclude_functions_and_qualified_names(self) -> None:
         assert bare_identifiers("coalesce(revenue, 0) / o.orders + cost") == ["revenue", "cost"]
 
-    def test_rewrite_leaves_quotes_alone(self):
+    def test_rewrite_leaves_quotes_alone(self) -> None:
         out = rewrite(
             "sum(o.x) + o.y || 'o.x' || \"o.x\"",
             qualified=lambda a, c: f"T.{c}",
         )
         assert out == "sum(T.x) + T.y || 'o.x' || \"o.x\""
 
-    def test_rewrite_handles_escaped_quotes_in_strings(self):
+    def test_rewrite_handles_escaped_quotes_in_strings(self) -> None:
         out = rewrite("'it''s revenue' || revenue", bare=lambda n: n.upper())
         assert out == "'it''s revenue' || REVENUE"

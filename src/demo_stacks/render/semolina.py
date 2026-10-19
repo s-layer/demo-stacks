@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import textwrap
+from typing import TYPE_CHECKING
 
-from demo_stacks.semantic import Definitions, SemanticView
+if TYPE_CHECKING:
+    from demo_stacks.semantic import Definitions, SemanticView
 
 HEADER = '''"""
 Semolina models for the {dataset} demo views.
@@ -25,9 +27,11 @@ def render(defs: Definitions) -> str:
     blocks = [HEADER.format(dataset=defs.dataset)]
     for view in defs.views:
         lines = [f'class {class_name(view)}(SemanticView, view="{view.name}"):']
+        lines += ['    """', f"    The ``{view.name}`` semantic view."]
         if view.description:
             doc = textwrap.fill(" ".join(view.description.split()), width=92)
-            lines += ['    """', textwrap.indent(doc, "    "), '    """', ""]
+            lines += ["", textwrap.indent(doc, "    ")]
+        lines += ['    """', ""]
         groups = [
             [f"    {f.name} = Fact()" for f in view.facts],
             [f"    {d.name} = Dimension()" for d in view.dimensions],
