@@ -1,0 +1,163 @@
+# Canonical semantic view definitions for the TPC-H demo dataset.
+#
+# This file is the single source of truth. `demo-stacks render` turns it into
+# DuckDB (duckdb-semantic-views), Snowflake and Databricks DDL plus Semolina
+# model classes, written under generated/. Edit this file, then re-render.
+#
+# The format is deliberately the intersection of what all three warehouses
+# can express, so every view renders everywhere:
+#
+#   - Each view has one root table (the first in `tables`). Every other table
+#     is reached from it by exactly one many-to-one relationship, so the
+#     tables form a tree. Databricks metric views need this shape (one
+#     `source`, nested `joins`); it also means no fan traps.
+#   - A relationship joins `from_columns` on its `from` table to the primary
+#     key of its `to` table.
+#   - Expressions reference columns as `<alias>.<column>`. Use SQL that means
+#     the same thing in DuckDB, Snowflake and Databricks.
+#   - An expression may only read columns of its own table. To use another
+#     table's value, declare a fact on that table and reference it as
+#     `<alias>.<fact>` (Snowflake's rule; Databricks gets the fact inlined).
+#   - A metric with a `table` is an aggregate. A metric without one is
+#     derived: its expression combines other metrics by bare name.
+
+dataset: tpch
+
+views:
+  - name: tpch_sales
+    description: >-
+      Line-item sales: revenue, discounts, quantities and supplier profit by
+      order, customer, part, supplier and geography.
+    tables:
+      - alias: li
+        table: lineitem
+        primary_key: [l_orderkey, l_linenumber]
+        description: One row per order line.
+      - alias: o
+        table: orders
+        primary_key: [o_orderkey]
+      - alias: c
+        table: customer
+        primary_key: [c_custkey]
+      - alias: cn
+        table: nation
+        primary_key: [n_nationkey]
+        description: The customer's nation.
+      - alias: cr
+        table: region
+        primary_key: [r_regionkey]
+        description: The customer's region.
+      - alias: p
+        table: part
+        primary_key: [p_partkey]
+      - alias: s
+        table: supplier
+        primary_key: [s_suppkey]
+      - alias: sn
+        table: nation
+        primary_key: [n_nationkey]
+        description: The supplier's nation.
+      - alias: sr
+        table: region
+        primary_key: [r_regionkey]
+        description: The supplier's region.
+      - alias: ps
+        table: partsupp
+        primary_key: [ps_partkey, ps_suppkey]
+    relationships:
+      - {name: line_order, from: li, from_columns: [l_orderkey], to: o}
+      - {name: order_customer, from: o, from_columns: [o_custkey], to: c}
+      - {name: customer_nation, from: c, from_columns: [c_nationkey], to: cn}
+      - {name: customer_region, from: cn, from_columns: [n_regionkey], to: cr}
+      - {name: line_part, from: li, from_columns: [l_partkey], to: p}
+      - {name: line_supplier, from: li, from_columns: [l_suppkey], to: s}
+      - {name: supplier_nation, from: s, from_columns: [s_nationkey], to: sn}
+      - {name: supplier_region, from: sn, from_columns: [n_regionkey], to: sr}
+      - {name: line_partsupp, from: li, from_columns: [l_partkey, l_suppkey], to: ps}
+    facts:
+      - name: unit_supply_cost
+        table: ps
+        expr: ps.ps_supplycost
+        description: What this supplier charges for one unit of this part.
+    dimensions:
+      - {name: order_date, table: o, expr: o.o_orderdate}
+      - {name: order_year, table: o, expr: year(o.o_orderdate)}
+      - {name: order_month, table: o, expr: "date_trunc('month', o.o_orderdate)"}
+      - {name: order_priority, table: o, expr: o.o_orderpriority}
+      - {name: order_status, table: o, expr: o.o_orderstatus}
+      - {name: ship_date, table: li, expr: li.l_shipdate}
+      - {name: ship_year, table: li, expr: year(li.l_shipdate)}
+      - {name: ship_mode, table: li, expr: li.l_shipmode}
+      - {name: return_flag, table: li, expr: li.l_returnflag}
+      - {name: line_status, table: li, expr: li.l_linestatus}
+      - {name: market_segment, table: c, expr: c.c_mktsegment}
+      - {name: customer_nation, table: cn, expr: cn.n_name}
+      - {name: customer_region, table: cr, expr: cr.r_name}
+      - {name: supplier_nation, table: sn, expr: sn.n_name}
+      - {name: supplier_region, table: sr, expr: sr.r_name}
+      - {name: part_brand, table: p, expr: p.p_brand}
+      - {name: part_type, table: p, expr: p.p_type}
+      - {name: part_container, table: p, expr: p.p_container}
+      - {name: part_size, table: p, expr: p.p_size}
+    metrics:
+      - {name: line_count, table: li, expr: count(*)}
+      - {name: order_count, table: li, expr: count(DISTINCT li.l_orderkey)}
+      - {name: quantity, table: li, expr: sum(li.l_quantity)}
+      - name: gross_revenue
+        table: li
+        expr: sum(li.l_extendedprice)
+        description: List price before discount.
+      - name: net_revenue
+        table: li
+        expr: sum(li.l_extendedprice * (1 - li.l_discount))
+        description: Revenue after discount (TPC-H Q5 "revenue").
+      - name: charged_amount
+        table: li
+        expr: sum(li.l_extendedprice * (1 - li.l_discount) * (1 + li.l_tax))
+        description: Net revenue plus tax (TPC-H Q1 "sum_charge").
+      - {name: avg_discount, table: li, expr: avg(li.l_discount)}
+      - {name: avg_price, table: li, expr: avg(li.l_extendedprice)}
+      - name: supply_cost
+        table: li
+        expr: sum(ps.unit_supply_cost * li.l_quantity)
+        description: What the supplier charged for the parts sold (TPC-H Q9).
+      - name: profit
+        expr: net_revenue - supply_cost
+        description: Net revenue less supply cost (TPC-H Q9 "sum_profit").
+
+  - name: tpch_orders
+    description: Orders and order value by customer and geography.
+    tables:
+      - alias: o
+        table: orders
+        primary_key: [o_orderkey]
+        description: One row per order.
+      - alias: c
+        table: customer
+        primary_key: [c_custkey]
+      - alias: n
+        table: nation
+        primary_key: [n_nationkey]
+      - alias: r
+        table: region
+        primary_key: [r_regionkey]
+    relationships:
+      - {name: order_customer, from: o, from_columns: [o_custkey], to: c}
+      - {name: customer_nation, from: c, from_columns: [c_nationkey], to: n}
+      - {name: nation_region, from: n, from_columns: [n_regionkey], to: r}
+    dimensions:
+      - {name: order_date, table: o, expr: o.o_orderdate}
+      - {name: order_year, table: o, expr: year(o.o_orderdate)}
+      - {name: order_month, table: o, expr: "date_trunc('month', o.o_orderdate)"}
+      - {name: order_priority, table: o, expr: o.o_orderpriority}
+      - {name: order_status, table: o, expr: o.o_orderstatus}
+      - {name: market_segment, table: c, expr: c.c_mktsegment}
+      - {name: customer_nation, table: n, expr: n.n_name}
+      - {name: customer_region, table: r, expr: r.r_name}
+    metrics:
+      - {name: order_count, table: o, expr: count(*)}
+      - {name: customer_count, table: o, expr: count(DISTINCT o.o_custkey)}
+      - {name: total_price, table: o, expr: sum(o.o_totalprice)}
+      - {name: avg_order_value, table: o, expr: avg(o.o_totalprice)}
+      - name: orders_per_customer
+        expr: order_count / customer_count
