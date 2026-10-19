@@ -4,11 +4,6 @@ variable "region" {
   default     = "eu-west-2"
 }
 
-variable "databricks_account_id" {
-  description = "Databricks account ID. Unity Catalog uses it as the external ID when it assumes the storage role."
-  type        = string
-}
-
 variable "name_prefix" {
   description = "Prefix for the bucket, IAM role and Unity Catalog objects. The bucket name is global, so make it unique to your account."
   type        = string
@@ -22,7 +17,7 @@ variable "catalog" {
 }
 
 variable "scale_factors" {
-  description = "TPC-H scale factors to keep. Each gets a schema tpch_sf<N> (see demo_stacks.s3tables.namespace, which this stack shares)."
+  description = "TPC-H scale factors to keep. Each gets a schema tpch_sf<N> (see demo_stacks.dataset.schema_name, which both stacks share)."
   type        = list(number)
   default     = [1, 10]
   validation {

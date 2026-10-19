@@ -44,7 +44,6 @@ From the repo root, with AWS credentials in your environment and:
 ```sh
 export DATABRICKS_HOST=https://<workspace>.cloud.databricks.com
 export DATABRICKS_TOKEN=dapi...                  # or omit it for browser OAuth
-export TF_VAR_databricks_account_id=<account id>
 ```
 
 ```sh
@@ -53,10 +52,12 @@ just dbx-stage 1          # generate SF1 locally if needed, upload to staging/tp
 just dbx-load 1           # CTAS each table on the loader, check counts, create the views
 ```
 
-`dbx-load` replaces every table from what is staged and then checks the row counts
-against the TPC-H spec, so a partial upload fails loudly instead of skewing every
-metric. `dbx-stage` syncs with `--delete`, so slices from an earlier run with more
-chunks don't linger in staging.
+`dbx-load` loads every table under a side name (`<table>__load`) and checks the
+row counts against the TPC-H spec, including that lineitem covers every order. Only
+then does it swap them in for the live tables the metric views read, so a partial or
+expired staging upload fails loudly and leaves the served data as it was.
+`dbx-stage` syncs with `--delete`, so slices from an earlier run with more chunks
+don't linger in staging.
 
 Staging uploads from your machine, which is fine for SF1 and SF10. For SF100 and
 up, generate and upload from AWS, e.g. with a stack 1 runner job.

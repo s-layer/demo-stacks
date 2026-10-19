@@ -7,14 +7,18 @@ import re
 from typing import TYPE_CHECKING, Any
 
 import adbc_poolhouse
+import duckdb
 import pytest
 import yaml
 
 from demo_stacks import cli, dataset
 from demo_stacks import databricks as dbx
 
+from .conftest import SF
+
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from pathlib import Path
 
     from demo_stacks import semantic
 
@@ -42,31 +46,69 @@ class FakeCursor:
 
 
 def full_counts(sf: float) -> dict[str, int]:
-    return dataset.expected_rows(sf) | {"lineitem": round(6_001_215 * sf)}
+    orders = dataset.expected_rows(sf)["orders"]
+    return dataset.expected_rows(sf) | {
+        "lineitem": round(6_001_215 * sf),
+        "orders_in_lineitem": orders,
+    }
 
 
-def test_each_table_is_a_ctas_from_its_staged_parquet() -> None:
+def test_each_table_loads_under_a_side_name_from_its_staged_parquet() -> None:
     stmts = dbx.load_statements(STAGING + "/", "cat.tpch_sf1", tables=["orders"])
     assert stmts == [
-        "CREATE OR REPLACE TABLE cat.tpch_sf1.orders CLUSTER BY AUTO AS SELECT * FROM "
+        "CREATE OR REPLACE TABLE cat.tpch_sf1.orders__load CLUSTER BY AUTO AS SELECT * FROM "
         "read_files('s3://bucket/staging/tpch_sf1/orders/', format => 'parquet')"
     ]
     assert len(dbx.load_statements(STAGING, "cat.tpch_sf1")) == len(dataset.TABLES)
 
 
-def test_load_replaces_every_table_then_checks_counts() -> None:
+def test_load_checks_everything_before_touching_the_live_tables() -> None:
     cursor = FakeCursor()
-    counts = dbx.load(cursor, STAGING, 1, catalog="cat")
-    assert counts == full_counts(1)
-    *ctas, count_sql = cursor.sql
+    assert dbx.load(cursor, STAGING, 1, catalog="cat") == full_counts(1)
+    n = len(dataset.TABLES)
+    ctas, (count_sql,), swaps = cursor.sql[:n], cursor.sql[n : n + 1], cursor.sql[n + 1 :]
     assert ctas == dbx.load_statements(STAGING, "cat.tpch_sf1")
-    assert "FROM cat.tpch_sf1.lineitem" in count_sql
+    assert "FROM cat.tpch_sf1.lineitem__load" in count_sql
+    assert swaps == dbx.swap_statements("cat.tpch_sf1")
+    assert swaps[:2] == [
+        "DROP TABLE IF EXISTS cat.tpch_sf1.region",
+        "ALTER TABLE cat.tpch_sf1.region__load RENAME TO cat.tpch_sf1.region",
+    ]
 
 
-def test_load_rejects_staging_that_is_not_one_complete_run() -> None:
-    short = full_counts(1) | {"orders": 1_499_999}
-    with pytest.raises(ValueError, match="orders: got 1499999, expected 1500000"):
-        dbx.load(FakeCursor(short), STAGING, 1, catalog="cat")
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        ({"orders": 1_499_999}, "orders: got 1499999, expected 1500000"),
+        ({"orders_in_lineitem": 1_350_000}, "lineitem is incomplete: it covers 1350000 of"),
+    ],
+)
+def test_a_failed_check_leaves_the_live_tables_alone(change: dict[str, int], message: str) -> None:
+    cursor = FakeCursor(full_counts(1) | change)
+    with pytest.raises(ValueError, match=message):
+        dbx.load(cursor, STAGING, 1, catalog="cat")
+    after_check = cursor.sql[len(dataset.TABLES) + 1 :]
+    assert after_check == [f"DROP TABLE IF EXISTS cat.tpch_sf1.{t}__load" for t in dataset.TABLES]
+
+
+def test_lineitem_check_catches_a_missing_slice(tmp_path: Path) -> None:
+    """
+    The guard's premise, on real dbgen output: slices keep an order's lines together.
+
+    Runs the same count query on DuckDB over a 3-slice SF0.01 run, whole and with one
+    lineitem slice missing.
+    """
+    dataset.generate(SF, tmp_path, chunks=3)
+    con = duckdb.connect()
+    dataset.load(con, tmp_path, schema="whole")
+    dbx.check_load(SF, dbx.count_rows(con, "whole"))
+
+    (tmp_path / "lineitem" / "part-00001.parquet").unlink()
+    dataset.load(con, tmp_path, schema="short")
+    counts = dbx.count_rows(con, "short")
+    assert dataset.check_counts(SF, counts) is None, "the spec counts alone miss it"
+    with pytest.raises(ValueError, match="lineitem is incomplete"):
+        dbx.check_load(SF, counts)
 
 
 def test_metric_views_are_created_in_the_scale_factor_schema(defs: semantic.Definitions) -> None:

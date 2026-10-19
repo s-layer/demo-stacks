@@ -122,8 +122,9 @@ def cmd_dbx_load(args: argparse.Namespace) -> int:
         if not args.views_only:
             staging = f"{args.staging.rstrip('/')}/{dataset.schema_name(args.scale_factor)}"
             counts = dbx.load(cursor, staging, args.scale_factor, catalog=args.catalog)
-            for table, n in counts.items():
-                print(f"loaded {dbx.schema(args.catalog, args.scale_factor)}.{table}: {n:,} rows")
+            for table in dataset.TABLES:
+                name = f"{dbx.schema(args.catalog, args.scale_factor)}.{table}"
+                print(f"loaded {name}: {counts[table]:,} rows")
         for name in dbx.create_views(cursor, defs, args.scale_factor, catalog=args.catalog):
             print(f"created metric view {name}")
     return 0

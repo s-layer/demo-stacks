@@ -47,13 +47,24 @@ resource "aws_s3_bucket_lifecycle_configuration" "storage" {
   }
 }
 
-# The IAM role Unity Catalog assumes to reach the bucket. The policy documents come
-# from the Databricks provider so the trust relationship (including the role
-# trusting itself, which UC requires) matches what Databricks expects.
+# The IAM role Unity Catalog assumes to reach the bucket. The storage credential
+# comes first, naming the role by ARN before it exists, because the role's trust
+# policy needs the external ID Databricks assigns to the credential. The policy
+# documents come from the Databricks provider so the trust relationship (including
+# the role trusting itself, which UC requires) matches what Databricks expects.
+resource "databricks_storage_credential" "storage" {
+  name = "${var.name_prefix}-storage"
+  aws_iam_role {
+    role_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.role_name}"
+  }
+  # The role does not exist yet; the external location below validates the pair.
+  skip_validation = true
+}
+
 data "databricks_aws_unity_catalog_assume_role_policy" "storage" {
   aws_account_id = data.aws_caller_identity.current.account_id
   role_name      = local.role_name
-  external_id    = var.databricks_account_id
+  external_id    = databricks_storage_credential.storage.aws_iam_role[0].external_id
 }
 
 data "databricks_aws_unity_catalog_policy" "storage" {
@@ -78,18 +89,11 @@ resource "time_sleep" "iam" {
   create_duration = "20s"
 }
 
-resource "databricks_storage_credential" "storage" {
-  name = "${var.name_prefix}-storage"
-  aws_iam_role {
-    role_arn = aws_iam_role.storage.arn
-  }
-  depends_on = [time_sleep.iam]
-}
-
 resource "databricks_external_location" "storage" {
   name            = "${var.name_prefix}-storage"
   url             = "s3://${aws_s3_bucket.storage.bucket}/"
   credential_name = databricks_storage_credential.storage.name
+  depends_on      = [time_sleep.iam]
 }
 
 resource "databricks_catalog" "demo" {

@@ -175,7 +175,7 @@ _s3-run run_id job_json:
 
 # --- stack 2: Databricks Lakehouse//RT -------------------------------------------
 # These create real AWS and Databricks resources. They use your current AWS
-# credentials, DATABRICKS_HOST and DATABRICKS_TOKEN, and TF_VAR_databricks_account_id.
+# credentials and DATABRICKS_HOST plus DATABRICKS_TOKEN (or browser OAuth for queries).
 
 # Plan the long-lived data root (bucket, storage credential, catalog, schemas, loader warehouse)
 dbx-data-plan:

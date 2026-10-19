@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 class Cursor(Protocol):
     """The slice of a DBAPI cursor this module uses."""
 
-    def execute(self, operation: str) -> Any: ...
+    def execute(self, operation: str, /) -> Any: ...
 
     def fetchall(self) -> Sequence[Any]: ...
 
@@ -42,47 +42,97 @@ def schema(catalog: str, sf: float) -> str:
     return f"{catalog}.{dataset.schema_name(sf)}"
 
 
+LOAD_SUFFIX = "__load"
+"""Tables are loaded under ``<table>__load`` and swapped in only once all check out."""
+
+
 def load_statements(
     staging_uri: str, schema: str, *, tables: Iterable[str] = dataset.TABLES
 ) -> list[str]:
     """
-    One CTAS per table, reading ``<staging_uri>/<table>/*.parquet``.
+    One CTAS per table into ``<table>__load``, reading ``<staging_uri>/<table>/*.parquet``.
 
     ``CLUSTER BY AUTO`` hands clustering to predictive optimization, which is what
     the Lakehouse//RT guidance asks for on the tables it serves.
     """
     base = staging_uri.rstrip("/")
     return [
-        f"CREATE OR REPLACE TABLE {schema}.{table} CLUSTER BY AUTO AS "
+        f"CREATE OR REPLACE TABLE {schema}.{table}{LOAD_SUFFIX} CLUSTER BY AUTO AS "
         f"SELECT * FROM read_files({sql_string(f'{base}/{table}/')}, format => 'parquet')"
         for table in tables
     ]
 
 
+def swap_statements(schema: str, *, tables: Iterable[str] = dataset.TABLES) -> list[str]:
+    """Replace each live table with its checked ``<table>__load`` copy."""
+    stmts: list[str] = []
+    for t in tables:
+        stmts += [
+            f"DROP TABLE IF EXISTS {schema}.{t}",
+            f"ALTER TABLE {schema}.{t}{LOAD_SUFFIX} RENAME TO {schema}.{t}",
+        ]
+    return stmts
+
+
 def count_rows(
-    cursor: Cursor, schema: str, tables: Iterable[str] = dataset.TABLES
+    cursor: Cursor, schema: str, tables: Iterable[str] = dataset.TABLES, *, suffix: str = ""
 ) -> dict[str, int]:
-    """Row count per table, in one round trip."""
-    sql = " UNION ALL ".join(
-        f"SELECT {sql_string(t)} AS t, count(*) AS n FROM {schema}.{t}" for t in tables
-    )
-    cursor.execute(sql)
+    """
+    Row count per table, in one round trip.
+
+    Also returns ``orders_in_lineitem``, the number of distinct orders lineitem
+    refers to. The spec fixes no exact lineitem count, but every order has line
+    items and ``dbgen`` slices keep an order's lines together, so a missing lineitem
+    slice shows up as this falling short of the ``orders`` count.
+    """
+    parts = [
+        f"SELECT {sql_string(t)} AS t, count(*) AS n FROM {schema}.{t}{suffix}" for t in tables
+    ]
+    if "lineitem" in tables:
+        parts.append(
+            "SELECT 'orders_in_lineitem' AS t, count(DISTINCT l_orderkey) AS n "
+            f"FROM {schema}.lineitem{suffix}"
+        )
+    cursor.execute(" UNION ALL ".join(parts))
     return {str(row[0]): int(row[1]) for row in cursor.fetchall()}
+
+
+def check_load(sf: float, counts: dict[str, int]) -> None:
+    """Raise unless ``counts`` (from :func:`count_rows`) are one complete TPC-H run at ``sf``."""
+    dataset.check_counts(sf, counts)
+    if counts["orders_in_lineitem"] != counts["orders"]:
+        raise ValueError(
+            f"TPC-H SF{sf} lineitem is incomplete: it covers {counts['orders_in_lineitem']} "
+            f"of {counts['orders']} orders"
+        )
 
 
 def load(cursor: Cursor, staging_uri: str, sf: float, *, catalog: str) -> dict[str, int]:
     """
-    Replace the TPC-H tables for ``sf`` from staged Parquet and check their row counts.
+    Replace the TPC-H tables for ``sf`` from staged Parquet, only if all of it checks out.
+
+    Every table is loaded under ``<table>__load`` first and checked against the
+    spec. Only then do the live tables, which the metric views and RT read, get
+    replaced, so a partial or stale staging upload leaves them as they were.
+
+    Returns:
+        Rows per table, plus ``orders_in_lineitem`` (see :func:`count_rows`).
 
     Raises:
-        ValueError: If a table's row count disagrees with the TPC-H spec for ``sf``,
-            which means the staged Parquet is not one complete run at that scale.
+        ValueError: If the staged Parquet is not one complete run at ``sf``.
     """
     target = schema(catalog, sf)
     for stmt in load_statements(staging_uri, target):
         cursor.execute(stmt)
-    counts = count_rows(cursor, target)
-    dataset.check_counts(sf, counts)
+    counts = count_rows(cursor, target, suffix=LOAD_SUFFIX)
+    try:
+        check_load(sf, counts)
+    except ValueError:
+        for t in dataset.TABLES:
+            cursor.execute(f"DROP TABLE IF EXISTS {target}.{t}{LOAD_SUFFIX}")
+        raise
+    for stmt in swap_statements(target):
+        cursor.execute(stmt)
     return counts
 
 
