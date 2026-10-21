@@ -79,6 +79,12 @@ local-query sf="1":
     @uv run python -c "import duckdb, sys; con = duckdb.connect('data/tpch_sf{{ sf }}.duckdb'); con.execute('LOAD semantic_views'); print(con.sql(sys.argv[1]))" \
         "FROM semantic_view('tpch_sales', dimensions := ['customer_region', 'order_year'], metrics := ['net_revenue', 'profit']) ORDER BY ALL"
 
+# Time direct SQL, semolina Arrow and semolina JSON on data/tpch_sf<sf>.duckdb (loads it first if missing)
+bench-local sf="1" repeats="10":
+    [ -f data/tpch_sf{{ sf }}.duckdb ] || just local {{ sf }}
+    uv run demo-stacks bench --database data/tpch_sf{{ sf }}.duckdb --repeats {{ repeats }} \
+        --out results/bench/duckdb-local-sf{{ sf }}.json
+
 # --- stack 1: duckdb-semantic-views on S3 Tables --------------------------------
 # These create real AWS resources and use your current AWS credentials.
 
@@ -214,3 +220,9 @@ dbx-query http_path sf="1" sql="":
 dbx-semolina http_path sf="1":
     uv run demo-stacks dbx-query --semolina --sf {{ sf }} --http-path {{ quote(http_path) }} \
         --catalog "$(terraform -chdir={{ dbx_stack }}/data output -raw catalog)"
+
+# Time direct SQL, semolina Arrow and semolina JSON on the warehouse at `http_path`, result cache off
+dbx-bench http_path sf="1" repeats="10":
+    uv run demo-stacks bench --sf {{ sf }} --http-path {{ quote(http_path) }} --repeats {{ repeats }} \
+        --catalog "$(terraform -chdir={{ dbx_stack }}/data output -raw catalog)" \
+        --out results/bench/databricks-sf{{ sf }}.json

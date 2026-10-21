@@ -8,13 +8,15 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from demo_stacks import bench, dataset, s3tables, semantic
 from demo_stacks import databricks as dbx
-from demo_stacks import dataset, s3tables, semantic
 from demo_stacks.render import databricks, duckdb, semolina, snowflake
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from types import ModuleType
+
+    from semolina.engines.base import Engine
 
 GENERATED = semantic.REPO_ROOT / "generated"
 
@@ -159,6 +161,41 @@ def cmd_dbx_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def bench_engine(args: argparse.Namespace) -> Engine:
+    """The registered engine ``bench`` times: a local DuckDB file, or a Databricks warehouse."""
+    import semolina
+
+    if args.http_path:
+        return dbx.bench_engine(args.http_path, args.catalog, args.scale_factor)
+    from adbc_poolhouse import DuckDBConfig
+
+    cfg = DuckDBConfig(database=str(args.database), read_only=True, pool_size=1)
+    return semolina.create_engine(cfg, register=True)
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    import json
+
+    models = load_models(semantic.load(args.definitions))
+    queries = tuple(q for q in bench.QUERIES if not args.query or q.name in args.query)
+    with bench_engine(args) as engine:
+        results = bench.run(
+            engine,
+            models,
+            queries=queries,
+            repeats=args.repeats,
+            warmup=args.warmup,
+            progress=lambda line: print(line, file=sys.stderr),
+        )
+    for line in bench.table(results):
+        print(line)
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(json.dumps([r.summary() for r in results], indent=2) + "\n")
+        print(f"wrote {args.out}", file=sys.stderr)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="demo-stacks", description=__doc__)
     parser.add_argument(
@@ -220,7 +257,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p.set_defaults(func=cmd_dbx_query)
 
+    p = sub.add_parser(
+        "bench", help="time direct SQL, semolina Arrow and semolina JSON on a stack's engine"
+    )
+    where = p.add_mutually_exclusive_group(required=True)
+    where.add_argument("--database", type=Path, help="local DuckDB file from `load`")
+    where.add_argument("--http-path", help="Databricks warehouse, e.g. the RT one")
+    p.add_argument("--catalog", help="with --http-path: the catalog holding tpch_sf<N>")
+    p.add_argument("--scale-factor", "--sf", type=float, help="with --http-path: schema tpch_sf<N>")
+    p.add_argument(
+        "--query",
+        action="append",
+        choices=[q.name for q in bench.QUERIES],
+        help="only this benchmark query (repeatable)",
+    )
+    p.add_argument("--repeats", type=int, default=10, help="timed runs per query and path")
+    p.add_argument("--warmup", type=int, default=1, help="untimed runs first")
+    p.add_argument("--out", type=Path, help="also write the summaries here as JSON")
+    p.set_defaults(func=cmd_bench)
+
     args = parser.parse_args(argv)
+    if (
+        getattr(args, "func", None) is cmd_bench
+        and args.http_path
+        and (not args.catalog or args.scale_factor is None)
+    ):
+        parser.error("bench --http-path needs --catalog and --scale-factor")
+    if getattr(args, "func", None) is cmd_bench and (args.repeats < 1 or args.warmup < 0):
+        parser.error("bench needs --repeats of at least 1 and --warmup of at least 0")
     if getattr(args, "func", None) is cmd_load and not args.views_only and not args.parquet:
         parser.error("load needs --parquet unless --views-only is given")
     if getattr(args, "func", None) is cmd_dbx_load and not args.views_only and not args.staging:
