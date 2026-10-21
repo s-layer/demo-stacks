@@ -262,18 +262,25 @@ def bench_engine(http_path: str, catalog: str, sf: float) -> Engine:
 
     Repeats of the same query would otherwise come back from Databricks' result cache
     and time nothing but the round trip. The setting is per session, so the pool holds
-    exactly one connection, and every timed path runs on it.
+    exactly one connection and never recycles it, and every timed path runs on it. An
+    error that would make the pool replace it ends the benchmark first, since the
+    benchmark catches nothing.
     """
     import semolina
 
     cfg = config(http_path, catalog=catalog, schema=dataset.schema_name(sf))
     engine = semolina.create_engine(
-        cfg.model_copy(update={"pool_size": 1, "max_overflow": 0}), register=True
+        cfg.model_copy(update={"pool_size": 1, "max_overflow": 0, "recycle": -1}),
+        register=True,
     )
-    with engine.connect() as conn:
-        cur = conn.cursor()
-        try:
-            cur.execute(NO_RESULT_CACHE)
-        finally:
-            cur.close()
+    try:
+        with engine.connect() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute(NO_RESULT_CACHE)
+            finally:
+                cur.close()
+    except BaseException:
+        engine.__exit__(None, None, None)
+        raise
     return engine

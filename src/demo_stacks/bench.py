@@ -1,15 +1,18 @@
 """
 Benchmark the ways an app can read a semantic view query, on any stack's engine.
 
-Each query runs down three paths, timed separately:
+Each query runs down four paths, timed separately:
 
 - ``sql``: the SQL and parameters semolina would send, run on a raw ADBC cursor from the same pool,
   read with ``fetch_arrow_table()``. The floor: no semolina in the loop.
 - ``semolina_arrow``: build the query with the generated models, ``execute()`` it and
-  read with ``fetch_arrow_table()``. The gap to ``sql`` is semolina's own cost.
+  read with ``fetch_arrow_table()``. The gap to ``sql`` is semolina's own cost. Its
+  ``execute`` and ``fetch`` stages are timed on their own.
 - ``semolina_json``: the same query read into Pydantic DTOs with ``cursor.into()``
   (arrowmodel), then serialised with ``TypeAdapter.dump_json``, which is what a web
-  endpoint would return. Its ``into`` and ``dump`` stages are timed on their own too.
+  endpoint would return. Its ``execute``, ``into`` and ``dump`` stages are timed on
+  their own. ``into`` fetches the result and converts it, so ``into`` minus
+  ``semolina_arrow``'s ``fetch`` is the conversion.
 - ``semolina_json_validate``: the same with ``into(validate=True)``, arrowmodel's
   Pydantic-validated path, which a DTO whose types differ from the result's needs.
 
@@ -31,7 +34,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
     import pyarrow as pa
-    from pydantic import BaseModel
+    from pydantic import BaseModel, TypeAdapter
     from semolina.engines.base import Engine
     from semolina.query import Query
 
@@ -168,44 +171,58 @@ def _run_sql(engine: Engine, sql: str, params: Any) -> tuple[int, dict[str, floa
 
 
 def _run_semolina_arrow(query: Query) -> tuple[int, dict[str, float]]:
+    t = time.perf_counter_ns()
     with query.execute() as cursor:
-        return cursor.fetch_arrow_table().num_rows, {}
+        execute = _ms(t)
+        t = time.perf_counter_ns()
+        n = cursor.fetch_arrow_table().num_rows
+        fetch = _ms(t)
+    return n, {"execute": execute, "fetch": fetch}
 
 
 def _run_semolina_json(
-    query: Query, dto: type[BaseModel], *, validate: bool = False
+    query: Query,
+    dto: type[BaseModel],
+    adapter: TypeAdapter[list[BaseModel]],
+    *,
+    validate: bool = False,
 ) -> tuple[int, dict[str, float]]:
-    from pydantic import TypeAdapter
-
-    # Built at run time from ``dto``, so it is a value here rather than a type expression.
-    rows_type: Any = list[dto]
-    adapter: TypeAdapter[list[BaseModel]] = TypeAdapter(rows_type)
     t = time.perf_counter_ns()
     with query.execute() as cursor:
+        execute = _ms(t)
+        t = time.perf_counter_ns()
         rows = cursor.into(dto, validate=validate)
-    into = _ms(t)
+        into = _ms(t)
     t = time.perf_counter_ns()
     body = adapter.dump_json(rows)
     dump = _ms(t)
     if not body.startswith(b"["):
         raise AssertionError("dump_json did not return a JSON array")
-    return len(rows), {"into": into, "dump": dump}
+    return len(rows), {"execute": execute, "into": into, "dump": dump}
 
 
 def _runners(
     engine: Engine, models: ModuleType, q: BenchQuery
 ) -> dict[str, Callable[[], tuple[int, dict[str, float]]]]:
     """One callable per path, each running ``q`` once and returning rows and stage times."""
+    from pydantic import TypeAdapter
+
     query = q.build(models)
     # Exactly what Engine.execute sends: the same text and bound parameters.
     sql, params = engine.dialect.create_builder().build_select_with_params(query)
     with query.execute() as cursor:
         dto = dto_for(cursor.fetch_arrow_table().schema, f"{q.name}_row")
+    # Built once, as an endpoint would at import. ``list[dto]`` is made at run time, so it
+    # is a value here rather than a type expression.
+    rows_type: Any = list[dto]
+    adapter: TypeAdapter[list[BaseModel]] = TypeAdapter(rows_type)
     return {
         "sql": lambda: _run_sql(engine, sql, params),
         "semolina_arrow": lambda: _run_semolina_arrow(q.build(models)),
-        "semolina_json": lambda: _run_semolina_json(q.build(models), dto),
-        "semolina_json_validate": lambda: _run_semolina_json(q.build(models), dto, validate=True),
+        "semolina_json": lambda: _run_semolina_json(q.build(models), dto, adapter),
+        "semolina_json_validate": lambda: _run_semolina_json(
+            q.build(models), dto, adapter, validate=True
+        ),
     }
 
 
@@ -222,17 +239,32 @@ def run(
     Time every query down every path on ``engine``, which must be registered.
 
     Paths are interleaved within each repeat, so a warehouse that speeds up or slows
-    down over the run affects them alike.
+    down over the run affects them alike. Every run, warmups included, must return the
+    same number of rows, so a short or empty read fails the benchmark instead of
+    timing it.
+
+    Raises:
+        ValueError: If ``repeats`` is below 1 or ``warmup`` below 0.
+        AssertionError: If any run's row count differs from the query's first.
     """
+    if repeats < 1 or warmup < 0:
+        raise ValueError(f"need repeats >= 1 and warmup >= 0, got {repeats} and {warmup}")
     results: list[Result] = []
     for q in queries:
         runners = _runners(engine, models, q)
         by_path = {p: Result(q.name, p) for p in PATHS}
+        expected: int | None = None
         for i in range(warmup + repeats):
             for path, fn in runners.items():
                 t = time.perf_counter_ns()
                 n, stages = fn()
                 elapsed = _ms(t)
+                if expected is None:
+                    expected = n
+                elif n != expected:
+                    raise AssertionError(
+                        f"{q.name}: {path} run {i} read {n:,} rows, expected {expected:,}"
+                    )
                 if i < warmup:
                     continue
                 r = by_path[path]
@@ -240,12 +272,9 @@ def run(
                 r.runs.append(elapsed)
                 for k, v in stages.items():
                     r.stages.setdefault(k, []).append(v)
-        rows = {r.rows for r in by_path.values()}
-        if len(rows) != 1:
-            raise AssertionError(f"{q.name}: paths disagree on row count: {rows}")
         results += by_path.values()
         if progress:
-            progress(f"{q.name}: {rows.pop():,} rows")
+            progress(f"{q.name}: {expected:,} rows")
     return results
 
 

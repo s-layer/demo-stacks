@@ -76,6 +76,10 @@ engine. Each query runs down four paths:
 | `semolina_json` | The same, read into Pydantic DTOs with `cursor.into()` (arrowmodel), then `TypeAdapter.dump_json`: what a web endpoint returns. |
 | `semolina_json_validate` | As `semolina_json`, with `into(validate=True)`. |
 
+The semolina paths also time their stages: `execute`, then `fetch` for Arrow, or
+`into` (fetch and convert to DTOs) and `dump` for JSON, so `into` minus `fetch` is
+arrowmodel's conversion.
+
 There are three queries on `tpch_sales`, returning 35 rows, about 2,000 rows and
 about 63,000 rows at SF1, so fixed costs and per-row costs each get a turn. Paths
 take turns within each repeat, so a warehouse that warms up or slows down affects

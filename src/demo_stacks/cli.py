@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from demo_stacks import bench, dataset, s3tables, semantic
 from demo_stacks import databricks as dbx
-from demo_stacks import dataset, s3tables, semantic
 from demo_stacks.render import databricks, duckdb, semolina, snowflake
 
 if TYPE_CHECKING:
@@ -176,8 +176,6 @@ def bench_engine(args: argparse.Namespace) -> Engine:
 def cmd_bench(args: argparse.Namespace) -> int:
     import json
 
-    from demo_stacks import bench
-
     models = load_models(semantic.load(args.definitions))
     queries = tuple(q for q in bench.QUERIES if not args.query or q.name in args.query)
     with bench_engine(args) as engine:
@@ -267,7 +265,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     where.add_argument("--http-path", help="Databricks warehouse, e.g. the RT one")
     p.add_argument("--catalog", help="with --http-path: the catalog holding tpch_sf<N>")
     p.add_argument("--scale-factor", "--sf", type=float, help="with --http-path: schema tpch_sf<N>")
-    p.add_argument("--query", action="append", help="only this benchmark query (repeatable)")
+    p.add_argument(
+        "--query",
+        action="append",
+        choices=[q.name for q in bench.QUERIES],
+        help="only this benchmark query (repeatable)",
+    )
     p.add_argument("--repeats", type=int, default=10, help="timed runs per query and path")
     p.add_argument("--warmup", type=int, default=1, help="untimed runs first")
     p.add_argument("--out", type=Path, help="also write the summaries here as JSON")
@@ -280,6 +283,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         and (not args.catalog or args.scale_factor is None)
     ):
         parser.error("bench --http-path needs --catalog and --scale-factor")
+    if getattr(args, "func", None) is cmd_bench and (args.repeats < 1 or args.warmup < 0):
+        parser.error("bench needs --repeats of at least 1 and --warmup of at least 0")
     if getattr(args, "func", None) is cmd_load and not args.views_only and not args.parquet:
         parser.error("load needs --parquet unless --views-only is given")
     if getattr(args, "func", None) is cmd_dbx_load and not args.views_only and not args.staging:

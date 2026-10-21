@@ -55,8 +55,34 @@ def test_json_paths_time_their_stages(engine: Engine, models: ModuleType) -> Non
     results = bench.run(engine, models, queries=bench.QUERIES[:1], repeats=1, warmup=0)
     by_path = {r.path: r for r in results}
     for path in ("semolina_json", "semolina_json_validate"):
-        assert set(by_path[path].stages) == {"into", "dump"}
-    assert by_path["sql"].stages == by_path["semolina_arrow"].stages == {}
+        assert list(by_path[path].stages) == ["execute", "into", "dump"]
+    assert list(by_path["semolina_arrow"].stages) == ["execute", "fetch"]
+    assert by_path["sql"].stages == {}
+
+
+@pytest.mark.parametrize(("repeats", "warmup"), [(0, 1), (1, -1)])
+def test_run_rejects_no_timed_runs(
+    engine: Engine, models: ModuleType, repeats: int, warmup: int
+) -> None:
+    with pytest.raises(ValueError, match="need repeats >= 1 and warmup >= 0"):
+        bench.run(engine, models, repeats=repeats, warmup=warmup)
+
+
+def test_run_fails_on_any_short_read(
+    monkeypatch: pytest.MonkeyPatch, engine: Engine, models: ModuleType
+) -> None:
+    """A run that comes back short fails the benchmark, even in an early repeat."""
+    counts = iter([35, 35, 0, 35])
+
+    def run_once() -> tuple[int, dict[str, float]]:
+        return next(counts), {}
+
+    def runners(*_: object) -> dict[str, Any]:
+        return dict.fromkeys(bench.PATHS, run_once)
+
+    monkeypatch.setattr(bench, "_runners", runners)
+    with pytest.raises(AssertionError, match="semolina_json run 0 read 0 rows, expected 35"):
+        bench.run(engine, models, queries=bench.QUERIES[:1], repeats=5, warmup=0)
 
 
 def test_dto_for_mirrors_the_schema() -> None:
@@ -112,49 +138,88 @@ def test_cli_bench_on_a_duckdb_file(
     assert {s["rows"] for s in summaries} == {35}
 
 
-def test_cli_bench_on_databricks_needs_catalog_and_scale_factor() -> None:
-    with pytest.raises(SystemExit):
-        cli.main(["bench", "--http-path", "/sql/1.0/warehouses/rt", "--sf", "1"])
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--http-path", "/sql/1.0/warehouses/rt", "--sf", "1"],
+        ["--database", "x.duckdb", "--repeats", "0"],
+        ["--database", "x.duckdb", "--warmup", "-1"],
+        ["--database", "x.duckdb", "--query", "region-year"],
+    ],
+    ids=["dbx-without-catalog", "no-repeats", "negative-warmup", "unknown-query"],
+)
+def test_cli_bench_rejects_bad_arguments(
+    extra: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["bench", *extra])
+    assert exc.value.code == 2
+    assert "error:" in capsys.readouterr().err
+
+
+class _FakeDbx:
+    """A stand-in for ``semolina.create_engine`` that records the config and the SQL run."""
+
+    def __init__(self, *, fail: bool = False) -> None:
+        self.configs: list[DatabricksPythonConfig] = []
+        self.executed: list[str] = []
+        self.closed = False
+        self.fail = fail
+
+    def create_engine(self, cfg: DatabricksPythonConfig, *, register: bool) -> Any:
+        assert register is True
+        self.configs.append(cfg)
+        fake = self
+
+        class Cursor:
+            def execute(self, sql: str) -> None:
+                fake.executed.append(sql)
+                if fake.fail:
+                    raise RuntimeError("SET refused")
+
+            def close(self) -> None:
+                pass
+
+        class Conn:
+            def __enter__(self) -> Conn:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                pass
+
+            def cursor(self) -> Cursor:
+                return Cursor()
+
+        class FakeEngine:
+            def connect(self) -> Conn:
+                return Conn()
+
+            def __exit__(self, *exc: object) -> None:
+                fake.closed = True
+
+        return FakeEngine()
 
 
 def test_dbx_bench_engine_turns_the_result_cache_off(monkeypatch: pytest.MonkeyPatch) -> None:
-    executed: list[str] = []
-    configs: list[DatabricksPythonConfig] = []
-
-    class Cursor:
-        def execute(self, sql: str) -> None:
-            executed.append(sql)
-
-        def close(self) -> None:
-            pass
-
-    class Conn:
-        def __enter__(self) -> Conn:
-            return self
-
-        def __exit__(self, *exc: object) -> None:
-            pass
-
-        def cursor(self) -> Cursor:
-            return Cursor()
-
-    class FakeEngine:
-        def connect(self) -> Conn:
-            return Conn()
-
-    def create_engine(cfg: DatabricksPythonConfig, *, register: bool) -> Any:
-        assert register is True
-        configs.append(cfg)
-        return FakeEngine()
-
-    monkeypatch.setattr(semolina, "create_engine", create_engine)
+    fake = _FakeDbx()
+    monkeypatch.setattr(semolina, "create_engine", fake.create_engine)
     monkeypatch.setenv("DATABRICKS_HOST", "dbc-1.cloud.databricks.com")
     dbx.bench_engine("/sql/1.0/warehouses/rt", "cat", 1)
-    ((cfg,),) = [configs]
-    assert (cfg.catalog, cfg.schema_, cfg.pool_size, cfg.max_overflow) == (
-        "cat",
-        "tpch_sf1",
-        1,
-        0,
+    ((cfg,),) = [fake.configs]
+    assert (cfg.catalog, cfg.schema_) == ("cat", "tpch_sf1")
+    assert (cfg.pool_size, cfg.max_overflow, cfg.recycle) == (1, 0, -1), (
+        "one connection, never replaced, so the SET holds for the whole run"
     )
-    assert executed == ["SET use_cached_result = false"]
+    assert fake.executed == ["SET use_cached_result = false"]
+    assert not fake.closed
+
+
+def test_dbx_bench_engine_closes_the_engine_if_the_set_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = _FakeDbx(fail=True)
+    monkeypatch.setattr(semolina, "create_engine", fake.create_engine)
+    monkeypatch.setenv("DATABRICKS_HOST", "dbc-1.cloud.databricks.com")
+    with pytest.raises(RuntimeError, match="SET refused"):
+        dbx.bench_engine("/sql/1.0/warehouses/rt", "cat", 1)
+    assert fake.closed
