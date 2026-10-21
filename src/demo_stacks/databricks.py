@@ -250,3 +250,30 @@ def semolina_engine(http_path: str, catalog: str, sf: float) -> Engine:
     return semolina.create_engine(
         config(http_path, catalog=catalog, schema=dataset.schema_name(sf)), register=True
     )
+
+
+NO_RESULT_CACHE = "SET use_cached_result = false"
+"""Makes a session run each query instead of answering a repeat from the result cache."""
+
+
+def bench_engine(http_path: str, catalog: str, sf: float) -> Engine:
+    """
+    :func:`semolina_engine` for benchmarks: one connection, with the result cache off.
+
+    Repeats of the same query would otherwise come back from Databricks' result cache
+    and time nothing but the round trip. The setting is per session, so the pool holds
+    exactly one connection, and every timed path runs on it.
+    """
+    import semolina
+
+    cfg = config(http_path, catalog=catalog, schema=dataset.schema_name(sf))
+    engine = semolina.create_engine(
+        cfg.model_copy(update={"pool_size": 1, "max_overflow": 0}), register=True
+    )
+    with engine.connect() as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute(NO_RESULT_CACHE)
+        finally:
+            cur.close()
+    return engine

@@ -64,6 +64,32 @@ queries, both nation roles) and through the generated Semolina models. The
 Snowflake and Databricks outputs are checked for shape only until their stacks run
 them.
 
+## Benchmarks
+
+`demo-stacks bench` times how an app can read a semantic view query, on any stack's
+engine. Each query runs down four paths:
+
+| Path | What it does |
+|---|---|
+| `sql` | The SQL and parameters semolina would send, on a raw pooled ADBC cursor, read as Arrow. No semolina in the loop. |
+| `semolina_arrow` | The query built from the generated models, `execute()`d and read with `fetch_arrow_table()`. |
+| `semolina_json` | The same, read into Pydantic DTOs with `cursor.into()` (arrowmodel), then `TypeAdapter.dump_json`: what a web endpoint returns. |
+| `semolina_json_validate` | As `semolina_json`, with `into(validate=True)`. |
+
+There are three queries on `tpch_sales`, returning 35 rows, about 2,000 rows and
+about 63,000 rows at SF1, so fixed costs and per-row costs each get a turn. Paths
+take turns within each repeat, so a warehouse that warms up or slows down affects
+them alike.
+
+```sh
+just bench-local 1                           # local DuckDB, SF1
+just dbx-bench /sql/1.0/warehouses/<rt-id> 1 # Lakehouse//RT (stack 2)
+```
+
+Both print a table and write the summaries to `results/bench/` as JSON. On
+Databricks the benchmark holds one connection and turns its result cache off, so
+repeats run the query rather than return a cached answer.
+
 ## Cost model
 
 Nothing bills while idle except stored bytes. Each stack splits into:

@@ -81,6 +81,22 @@ wheels = [
 ]
 
 [[package]]
+name = "arrowmodel"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/45/4f/ff00091f8325ea1cad369c4b94a41f8d0e3778492c5209bb215a80d282ad/arrowmodel-1.0.1.tar.gz", hash = "sha256:5a0512ee7ddd401a4723450fc8f76ebc1ea331aab564eea570cb01acbc3e1fd0", size = 29634, upload-time = "2026-10-14T13:32:03.524Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e6/b3/d0fcc01abe13c747505664888cf396f42b635d25bccfb8f5d72f6c431527/arrowmodel-1.0.1-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:f7a62d8439b20c68502e61881ccc95764ca9e305bcc0094efd13086c615c17eb", size = 2699402, upload-time = "2026-10-14T13:31:53.989Z" },
+    { url = "https://files.pythonhosted.org/packages/df/ff/0f4957eb953177a7032b093c8ce2042feab48bcdce1e31282922c954ddc7/arrowmodel-1.0.1-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:b96fafca62ff084cef7a43cf9ba8ae6640c5fc60618a1fd6ad7cd2e4d109a610", size = 2546287, upload-time = "2026-10-14T13:31:55.831Z" },
+    { url = "https://files.pythonhosted.org/packages/79/41/5b9fbfc52c0bf344946f06158ee6f48a48d8755230f4b022cbf5659e7821/arrowmodel-1.0.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e99f86127c2cb852bfe4ed6237ed91ebddffa13542954d6aa51de76748bb119d", size = 2953082, upload-time = "2026-10-14T13:31:57.936Z" },
+    { url = "https://files.pythonhosted.org/packages/4d/e2/88f5faa50c62c41cd29543b8cb9349d9ed2faa2bf39d8c9870dd507ef8d6/arrowmodel-1.0.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a063b75cb5837420b2fd9f9c1e6df14317c59700ec9aea599375a772bf965d50", size = 3030859, upload-time = "2026-10-14T13:32:00.122Z" },
+    { url = "https://files.pythonhosted.org/packages/11/e7/e44f6abf1185e3eeb6cd40b8272413c83427c80c4b9e263767f6df7af73d/arrowmodel-1.0.1-cp311-abi3-win_amd64.whl", hash = "sha256:aa42832fdacf85e0baa293f69d5b829cf848d5d78a8d6d30c6daa972f23434c7", size = 2615402, upload-time = "2026-10-14T13:32:02.144Z" },
+]
+
+[[package]]
 name = "basedpyright"
 version = "1.40.2"
 source = { registry = "https://pypi.org/simple" }
@@ -443,10 +459,11 @@ dev = [
     { name = "adbc-poolhouse", extra = ["databricks-python"] },
     { name = "basedpyright" },
     { name = "databricks-sql-connector", extra = ["kernel", "pyarrow"] },
+    { name = "pyarrow-stubs" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
-    { name = "semolina", extra = ["duckdb"] },
+    { name = "semolina", extra = ["arrowmodel", "duckdb"] },
     { name = "types-pyyaml" },
 ]
 
@@ -466,10 +483,11 @@ dev = [
     { name = "adbc-poolhouse", extras = ["databricks-python"], specifier = ">=1.6.4" },
     { name = "basedpyright", specifier = ">=1.38" },
     { name = "databricks-sql-connector", extras = ["kernel", "pyarrow"], specifier = ">=4.6" },
+    { name = "pyarrow-stubs", specifier = ">=20.0.0.20260625" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.15" },
-    { name = "semolina", extras = ["duckdb"], git = "https://github.com/s-layer/semolina?rev=60b17851390cb2955db2b170351ce52c62636960" },
+    { name = "semolina", extras = ["duckdb", "arrowmodel"], git = "https://github.com/s-layer/semolina?rev=60b17851390cb2955db2b170351ce52c62636960" },
     { name = "types-pyyaml", specifier = ">=6" },
 ]
 
@@ -929,6 +947,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pyarrow-stubs"
+version = "20.0.0.20260819"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyarrow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/a7/8a2ca91ffe4c6576207f932de655d7d8a36485c520dccce70ce7d492b256/pyarrow_stubs-20.0.0.20260819.tar.gz", hash = "sha256:150710a72248bc834bf048d3092713f070904a4af76d40289c43afb3ee189823", size = 238222, upload-time = "2026-08-19T05:52:53.618Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/65/6c/eea1d03e475217aea95b1d52aee09c97575d05bbc592c39c085b71dab89f/pyarrow_stubs-20.0.0.20260819-py3-none-any.whl", hash = "sha256:297e60b6e5314739c082b4757d090d8be6047465510eb0684ca954ef7ea58be3", size = 235949, upload-time = "2026-08-19T05:52:54.711Z" },
+]
+
+[[package]]
 name = "pybreaker"
 version = "1.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1273,6 +1303,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+arrowmodel = [
+    { name = "arrowmodel" },
+    { name = "pyarrow" },
+]
 duckdb = [
     { name = "duckdb" },
     { name = "pyarrow" },
