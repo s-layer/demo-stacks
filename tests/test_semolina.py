@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 from typing import TYPE_CHECKING
 
 import pytest
@@ -22,12 +21,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def models() -> ModuleType:
-    path = cli.GENERATED / "semolina" / "tpch_models.py"
-    spec = importlib.util.spec_from_file_location("tpch_models", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return cli.load_models()
 
 
 @pytest.fixture

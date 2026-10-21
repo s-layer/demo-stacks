@@ -15,7 +15,13 @@ dependencies = [
 
 [project.optional-dependencies]
 # Stack 2 (Lakehouse//RT): the Statement Execution path, which RT requires.
-databricks = ["adbc-poolhouse[databricks-python]>=1.6.4"]
+# DatabricksPythonConfig defaults to use_kernel=True, which needs the connector's
+# [kernel] extra; adbc-poolhouse's databricks-python extra doesn't pull it in.
+databricks = [
+    "adbc-poolhouse[databricks-python]>=1.6.4",
+    "databricks-sql-connector[kernel,pyarrow]>=4.6",
+    "semolina>=0.7.0",
+]
 
 [project.scripts]
 demo-stacks = "demo_stacks.cli:main"
@@ -23,6 +29,7 @@ demo-stacks = "demo_stacks.cli:main"
 [dependency-groups]
 dev = [
     "adbc-poolhouse[databricks-python]>=1.6.4",
+    "databricks-sql-connector[kernel,pyarrow]>=4.6",
     "basedpyright>=1.38",
     "pytest>=8",
     "pytest-cov>=6",
@@ -30,6 +37,11 @@ dev = [
     "semolina[duckdb]>=0.7.0",
     "types-pyyaml>=6",
 ]
+
+[tool.uv.sources]
+# DatabricksPythonConfig support (s-layer/semolina#69) isn't in a release yet.
+# Drop this pin, and raise the semolina floors, once a release carries it.
+semolina = { git = "https://github.com/s-layer/semolina", rev = "60b17851390cb2955db2b170351ce52c62636960" }
 
 [build-system]
 requires = ["hatchling>=1.25"]

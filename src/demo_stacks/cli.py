@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -13,6 +14,7 @@ from demo_stacks.render import databricks, duckdb, semolina, snowflake
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
+    from types import ModuleType
 
 GENERATED = semantic.REPO_ROOT / "generated"
 
@@ -130,7 +132,26 @@ def cmd_dbx_load(args: argparse.Namespace) -> int:
     return 0
 
 
+def load_models(defs: semantic.Definitions | None = None) -> ModuleType:
+    """Import the generated semolina models, ``generated/semolina/<dataset>_models.py``."""
+    name = f"{(defs or semantic.load()).dataset}_models"
+    spec = importlib.util.spec_from_file_location(name, GENERATED / "semolina" / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def cmd_dbx_query(args: argparse.Namespace) -> int:
+    if args.semolina:
+        query = dbx.semolina_sample(load_models(semantic.load(args.definitions)))
+        with (
+            dbx.semolina_engine(args.http_path, args.catalog, args.scale_factor),
+            query.execute() as result,
+        ):
+            for row in result.fetchall_rows():
+                print("\t".join(str(v) for v in row.values()))
+        return 0
     with dbx.connect(args.http_path) as cursor:
         cursor.execute(args.sql or dbx.sample_query(args.catalog, args.scale_factor))
         for row in cursor.fetchall():
@@ -192,7 +213,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--http-path", required=True)
     p.add_argument("--catalog", required=True)
     p.add_argument("--scale-factor", "--sf", type=float, required=True)
-    p.add_argument("--sql", help="query to run instead of the sample metric view query")
+    how = p.add_mutually_exclusive_group()
+    how.add_argument("--sql", help="query to run instead of the sample metric view query")
+    how.add_argument(
+        "--semolina", action="store_true", help="run the sample through the semolina models"
+    )
     p.set_defaults(func=cmd_dbx_query)
 
     args = parser.parse_args(argv)

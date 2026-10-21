@@ -209,3 +209,8 @@ dbx-query http_path sf="1" sql="":
     uv run demo-stacks dbx-query --sf {{ sf }} --http-path {{ quote(http_path) }} \
         --catalog "$(terraform -chdir={{ dbx_stack }}/data output -raw catalog)" \
         {{ if sql == "" { "" } else { "--sql " + quote(sql) } }}
+
+# Run the sample query through the semolina models on the warehouse at `http_path`
+dbx-semolina http_path sf="1":
+    uv run demo-stacks dbx-query --semolina --sf {{ sf }} --http-path {{ quote(http_path) }} \
+        --catalog "$(terraform -chdir={{ dbx_stack }}/data output -raw catalog)"

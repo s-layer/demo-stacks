@@ -25,6 +25,11 @@ from demo_stacks.render import sql_string
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
     from contextlib import AbstractContextManager
+    from types import ModuleType
+
+    from adbc_poolhouse import DatabricksPythonConfig
+    from semolina.engines.base import Engine
+    from semolina.query import Query
 
     from demo_stacks import semantic
 
@@ -183,29 +188,41 @@ def host_from_env() -> str:
     return host
 
 
-def connect(http_path: str) -> AbstractContextManager[Cursor]:
+def config(
+    http_path: str, *, catalog: str | None = None, schema: str | None = None
+) -> DatabricksPythonConfig:
     """
-    A cursor on the warehouse at ``http_path``, over the Statement Execution API.
+    The adbc-poolhouse config for the warehouse at ``http_path``.
 
-    Authenticates with ``DATABRICKS_TOKEN`` when it is set, otherwise with the
-    browser OAuth flow.
+    Uses ``DATABRICKS_TOKEN`` when it is set, otherwise the browser OAuth flow.
+    ``catalog`` and ``schema`` set the default namespace, which is how semolina's
+    unqualified view names find ``catalog.tpch_sf<N>``.
     """
-    from contextlib import contextmanager
-
-    from adbc_poolhouse import DatabricksPythonConfig, close_pool, create_pool
+    from adbc_poolhouse import DatabricksPythonConfig
     from pydantic import SecretStr
 
     token = os.environ.get("DATABRICKS_TOKEN")
-    config = DatabricksPythonConfig(
+    return DatabricksPythonConfig(
         host=host_from_env(),
         http_path=http_path,
         token=SecretStr(token) if token else None,
         auth_type=None if token else "OAuthU2M",
+        catalog=catalog,
+        schema=schema,
     )
+
+
+def connect(http_path: str) -> AbstractContextManager[Cursor]:
+    """A cursor on the warehouse at ``http_path``, over the Statement Execution API."""
+    from contextlib import contextmanager
+
+    from adbc_poolhouse import close_pool, create_pool
+
+    cfg = config(http_path)
 
     @contextmanager
     def cursor() -> Generator[Cursor]:
-        pool = create_pool(config)
+        pool = create_pool(cfg)
         try:
             with pool.connect() as conn:
                 yield conn.cursor()
@@ -213,3 +230,23 @@ def connect(http_path: str) -> AbstractContextManager[Cursor]:
             close_pool(pool)
 
     return cursor()
+
+
+def semolina_sample(models: ModuleType) -> Query:
+    """:func:`sample_query` written with the generated semolina models."""
+    sales = models.TpchSales
+    return (
+        sales.query()
+        .metrics(sales.net_revenue, sales.profit)
+        .dimensions(sales.customer_region, sales.order_year)
+        .order_by(sales.customer_region, sales.order_year)
+    )
+
+
+def semolina_engine(http_path: str, catalog: str, sf: float) -> Engine:
+    """A registered semolina engine whose default namespace is ``catalog.tpch_sf<N>``."""
+    import semolina
+
+    return semolina.create_engine(
+        config(http_path, catalog=catalog, schema=dataset.schema_name(sf)), register=True
+    )
