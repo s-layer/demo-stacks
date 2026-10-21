@@ -82,18 +82,17 @@ wheels = [
 
 [[package]]
 name = "arrowmodel"
-version = "1.0.1"
+version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/45/4f/ff00091f8325ea1cad369c4b94a41f8d0e3778492c5209bb215a80d282ad/arrowmodel-1.0.1.tar.gz", hash = "sha256:5a0512ee7ddd401a4723450fc8f76ebc1ea331aab564eea570cb01acbc3e1fd0", size = 29634, upload-time = "2026-10-14T13:32:03.524Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/8e/116b8442909258573753b7f7a25f712fee8d1a70205de24a207b7609038d/arrowmodel-1.1.0.tar.gz", hash = "sha256:852756545ea668624932d97b1b84e4864bbc27166f527ea9f553e93a4856c143", size = 35317, upload-time = "2026-10-21T11:31:13.565Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e6/b3/d0fcc01abe13c747505664888cf396f42b635d25bccfb8f5d72f6c431527/arrowmodel-1.0.1-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:f7a62d8439b20c68502e61881ccc95764ca9e305bcc0094efd13086c615c17eb", size = 2699402, upload-time = "2026-10-14T13:31:53.989Z" },
-    { url = "https://files.pythonhosted.org/packages/df/ff/0f4957eb953177a7032b093c8ce2042feab48bcdce1e31282922c954ddc7/arrowmodel-1.0.1-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:b96fafca62ff084cef7a43cf9ba8ae6640c5fc60618a1fd6ad7cd2e4d109a610", size = 2546287, upload-time = "2026-10-14T13:31:55.831Z" },
-    { url = "https://files.pythonhosted.org/packages/79/41/5b9fbfc52c0bf344946f06158ee6f48a48d8755230f4b022cbf5659e7821/arrowmodel-1.0.1-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:e99f86127c2cb852bfe4ed6237ed91ebddffa13542954d6aa51de76748bb119d", size = 2953082, upload-time = "2026-10-14T13:31:57.936Z" },
-    { url = "https://files.pythonhosted.org/packages/4d/e2/88f5faa50c62c41cd29543b8cb9349d9ed2faa2bf39d8c9870dd507ef8d6/arrowmodel-1.0.1-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a063b75cb5837420b2fd9f9c1e6df14317c59700ec9aea599375a772bf965d50", size = 3030859, upload-time = "2026-10-14T13:32:00.122Z" },
-    { url = "https://files.pythonhosted.org/packages/11/e7/e44f6abf1185e3eeb6cd40b8272413c83427c80c4b9e263767f6df7af73d/arrowmodel-1.0.1-cp311-abi3-win_amd64.whl", hash = "sha256:aa42832fdacf85e0baa293f69d5b829cf848d5d78a8d6d30c6daa972f23434c7", size = 2615402, upload-time = "2026-10-14T13:32:02.144Z" },
+    { url = "https://files.pythonhosted.org/packages/57/51/8e1358e32a9e11508413d4f1f57747020022d23b0331640621140a065673/arrowmodel-1.1.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:d2e1b1579c2779cbb15f7522e74d7debe6fdee282f0280670c86676e8609157d", size = 2628951, upload-time = "2026-10-21T11:31:07.317Z" },
+    { url = "https://files.pythonhosted.org/packages/98/25/d64e460f06e6d89b43ceccb7d334b3b929907b346e852a2c4e4504bc8732/arrowmodel-1.1.0-cp311-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:af7c764d3c0c265826ef67c83f400bc6b2a78a99a9b713e3c321728216a0527b", size = 3046012, upload-time = "2026-10-21T11:31:08.839Z" },
+    { url = "https://files.pythonhosted.org/packages/77/85/469fb0e5bb27ed352ca772749e3c8d7a6fa903171e604890fb033da11123/arrowmodel-1.1.0-cp311-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9445967d2a6917addf8534cdee14300a27be50d15cc047bf022c86d2f3f84cec", size = 3115817, upload-time = "2026-10-21T11:31:10.513Z" },
+    { url = "https://files.pythonhosted.org/packages/61/98/1622278bb07c85a4ae2c95e1d0bfa5e22aa0d7cd316389e79979dd5f59d0/arrowmodel-1.1.0-cp311-abi3-win_amd64.whl", hash = "sha256:5ec43d4c3cfbbf1dcd1086fbe99e0f4c5fd3a0cc297448bbcbf956603fae2f3a", size = 2678004, upload-time = "2026-10-21T11:31:12.003Z" },
 ]
 
 [[package]]
@@ -457,6 +456,7 @@ databricks = [
 [package.dev-dependencies]
 dev = [
     { name = "adbc-poolhouse", extra = ["databricks-python"] },
+    { name = "arrowmodel" },
     { name = "basedpyright" },
     { name = "databricks-sql-connector", extra = ["kernel", "pyarrow"] },
     { name = "pyarrow-stubs" },
@@ -481,6 +481,7 @@ provides-extras = ["databricks"]
 [package.metadata.requires-dev]
 dev = [
     { name = "adbc-poolhouse", extras = ["databricks-python"], specifier = ">=1.6.4" },
+    { name = "arrowmodel", specifier = ">=1.1.0" },
     { name = "basedpyright", specifier = ">=1.38" },
     { name = "databricks-sql-connector", extras = ["kernel", "pyarrow"], specifier = ">=4.6" },
     { name = "pyarrow-stubs", specifier = ">=20.0.0.20260625" },
