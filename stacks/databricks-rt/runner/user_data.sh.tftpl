@@ -1,0 +1,45 @@
+#!/bin/bash
+# Runs once at first boot as root. Whatever happens, the instance powers off at
+# the end, and the shutdown behaviour terminates it.
+set -uo pipefail
+
+# Hard stop first, so a hung job cannot run up a bill.
+shutdown -h +${max_lifetime_minutes}
+
+export AWS_REGION='${region}'
+export DATABRICKS_HOST='${databricks_host}'
+export RESULTS_DIR=/data/results
+RUN_PREFIX='s3://${results_bucket}/results/runs/${run_id}'
+LOG=/data/results/runner.log
+
+mkdir -p /data/results
+exec > >(tee -a "$LOG") 2>&1
+
+finish() {
+  status=$?
+  echo "job exited with status $status"
+  echo "$status" > /data/results/exit_status
+  aws s3 cp --recursive --only-show-errors /data/results "$RUN_PREFIX/" || true
+  shutdown -h now
+}
+trap finish EXIT
+
+set -e
+DATABRICKS_TOKEN=$(aws ssm get-parameter --name '${token_parameter}' --with-decryption \
+  --query Parameter.Value --output text)
+export DATABRICKS_TOKEN
+
+dnf install -y -q git
+export HOME=/root
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+git clone --quiet '${repo_url}' /data/repo
+cd /data/repo
+git checkout --quiet '${repo_ref}'
+echo "demo-stacks at $(git rev-parse HEAD)"
+# Pin the newest interpreter CI covers: uv would otherwise pick a pre-release
+# (3.15), which has no duckdb wheel and so tries to compile it.
+uv sync --no-dev --python 3.14
+
+${command}

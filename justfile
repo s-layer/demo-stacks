@@ -4,7 +4,7 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 
 s3_stack := "stacks/duckdb-s3tables"
 dbx_stack := "stacks/databricks-rt"
-tf_roots := "stacks/duckdb-s3tables/data stacks/duckdb-s3tables/runner stacks/databricks-rt/data"
+tf_roots := "stacks/duckdb-s3tables/data stacks/duckdb-s3tables/runner stacks/databricks-rt/data stacks/databricks-rt/runner"
 
 # List recipes
 default:
@@ -132,6 +132,12 @@ s3-run command instance_type="r7i.2xlarge":
     just _s3-run "run-$(date -u +%Y%m%d-%H%M%S)" \
         "$(jq -cn --arg c {{ quote(command) }} --arg t {{ quote(instance_type) }} '{job: "shell", command: $c, instance_type: $t}')"
 
+# Launch a runner that times direct SQL, semolina Arrow and semolina JSON on tpch_sf<sf> in the table bucket
+s3-bench sf="10" repeats="10" instance_type="r7i.2xlarge":
+    just s3-run \
+        'uv run demo-stacks bench --s3-tables-arn "$TABLE_BUCKET_ARN" --region "$AWS_REGION" --sf {{ sf }} --repeats {{ repeats }} --out "$RESULTS_DIR/duckdb-s3tables-sf{{ sf }}.json" 2>&1 | tee "$RESULTS_DIR/bench.txt"' \
+        {{ quote(instance_type) }}
+
 # Show the current runner's state: instance status, then its log once uploaded
 s3-runner-status:
     #!/usr/bin/env bash
@@ -226,3 +232,62 @@ dbx-bench http_path sf="1" repeats="10":
     uv run demo-stacks bench --sf {{ sf }} --http-path {{ quote(http_path) }} --repeats {{ repeats }} \
         --catalog "$(terraform -chdir={{ dbx_stack }}/data output -raw catalog)" \
         --out results/bench/databricks-sf{{ sf }}.json
+
+# Launch a runner in the workspace's AWS region that runs `command` (DATABRICKS_HOST and DATABRICKS_TOKEN must be set)
+dbx-run command instance_type="m7i.large":
+    just _dbx-run "run-$(date -u +%Y%m%d-%H%M%S)" {{ quote(command) }} {{ quote(instance_type) }}
+
+# Launch a runner that times the warehouse at `http_path` from inside AWS (DATABRICKS_HOST and DATABRICKS_TOKEN must be set)
+dbx-bench-aws http_path sf="1" repeats="10" instance_type="m7i.large":
+    just dbx-run \
+        'uv run demo-stacks bench --sf {{ sf }} --http-path {{ quote(http_path) }} --repeats {{ repeats }} --catalog '"'$(terraform -chdir={{ dbx_stack }}/data output -raw catalog)'"' --out "$RESULTS_DIR/databricks-sf{{ sf }}.json" 2>&1 | tee "$RESULTS_DIR/bench.txt"' \
+        {{ quote(instance_type) }}
+
+# Show the current dbx runner's state: instance status, then its log once uploaded
+dbx-runner-status:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    vars={{ dbx_stack }}/runner/run.auto.tfvars.json
+    [ -f "$vars" ] || { echo "no runner launched"; exit 1; }
+    run_id=$(jq -r .run_id "$vars"); bucket=$(jq -r .results_bucket "$vars")
+    id=$(terraform -chdir={{ dbx_stack }}/runner output -raw instance_id)
+    echo "run $run_id: instance $id is $(aws ec2 describe-instances --instance-ids "$id" \
+        --query 'Reservations[0].Instances[0].State.Name' --output text 2>/dev/null || echo gone)"
+    aws s3 cp "s3://$bucket/results/runs/$run_id/runner.log" - 2>/dev/null || echo "(no log uploaded yet)"
+
+# Destroy the current dbx runner's leftovers (IAM role, security group, token parameter; the instance self-terminates)
+dbx-runner-destroy:
+    TF_VAR_databricks_token=unused terraform -chdir={{ dbx_stack }}/runner destroy -auto-approve
+    rm -f {{ dbx_stack }}/runner/run.auto.tfvars.json
+
+# Write the dbx runner's variables, then apply. The token goes through TF_VAR_, not the vars file.
+_dbx-run run_id command instance_type:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    : "${DATABRICKS_HOST:?set DATABRICKS_HOST}" "${DATABRICKS_TOKEN:?a runner cannot do browser OAuth; set DATABRICKS_TOKEN}"
+    vars={{ dbx_stack }}/runner/run.auto.tfvars.json
+    if [ -f "$vars" ]; then
+        echo "runner $(jq -r .run_id "$vars") is still recorded; run 'just dbx-runner-destroy' first" >&2
+        exit 1
+    fi
+    trap 'rm -f "$vars.tmp"' EXIT
+    ref=$(git rev-parse HEAD)
+    if ! git branch -r --contains "$ref" | grep -q .; then
+        echo "commit $ref is not pushed; the runner clones from GitHub" >&2
+        exit 1
+    fi
+    staging=$(terraform -chdir={{ dbx_stack }}/data output -raw staging_uri)
+    bucket=${staging#s3://}; bucket=${bucket%%/*}
+    jq -n \
+        --arg bucket "$bucket" \
+        --arg run_id {{ quote(run_id) }} \
+        --arg ref "$ref" \
+        --arg host "$DATABRICKS_HOST" \
+        --arg command {{ quote(command) }} \
+        --arg t {{ quote(instance_type) }} \
+        '{results_bucket: $bucket, run_id: $run_id, repo_ref: $ref, databricks_host: $host,
+          command: $command, instance_type: $t}' > "$vars.tmp"
+    mv "$vars.tmp" "$vars"
+    terraform -chdir={{ dbx_stack }}/runner init -input=false >/dev/null
+    TF_VAR_databricks_token="$DATABRICKS_TOKEN" terraform -chdir={{ dbx_stack }}/runner apply
+    echo "launched {{ run_id }}; follow it with 'just dbx-runner-status'"

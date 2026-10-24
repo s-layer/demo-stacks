@@ -162,15 +162,55 @@ def cmd_dbx_query(args: argparse.Namespace) -> int:
 
 
 def bench_engine(args: argparse.Namespace) -> Engine:
-    """The registered engine ``bench`` times: a local DuckDB file, or a Databricks warehouse."""
+    """The registered engine ``bench`` times: a local DuckDB file, S3 Tables, or Databricks."""
     import semolina
 
     if args.http_path:
         return dbx.bench_engine(args.http_path, args.catalog, args.scale_factor)
+    if args.s3_tables_arn:
+        return s3tables_bench_engine(args)
     from adbc_poolhouse import DuckDBConfig
 
     cfg = DuckDBConfig(database=str(args.database), read_only=True, pool_size=1)
     return semolina.create_engine(cfg, register=True)
+
+
+def s3tables_bench_engine(args: argparse.Namespace) -> Engine:
+    """
+    A DuckDB engine with the table bucket attached and the semantic views created over it.
+
+    The views live in a scratch database file, since ``ATTACH`` is not saved anyway and
+    ``load`` leaves its views on whichever machine ran it. One connection, so the
+    attachment, secret and views are in the session every timed path uses.
+    """
+    import tempfile
+
+    import semolina
+    from adbc_poolhouse import DuckDBConfig
+
+    defs = semantic.load(args.definitions)
+    schema = s3tables.schema(args.scale_factor)
+    path = Path(tempfile.mkdtemp(prefix="bench-")) / "views.duckdb"
+    cfg = DuckDBConfig(database=str(path), pool_size=1, max_overflow=0, recycle=-1)
+    engine = semolina.create_engine(cfg, register=True)
+    try:
+        with engine.connect() as conn:
+            cur = conn.cursor()
+            try:
+                for stmt in s3tables.setup_sql(args.s3_tables_arn, region=args.region):
+                    cur.execute(stmt)
+                cur.execute("INSTALL semantic_views FROM community")
+                cur.execute("LOAD semantic_views")
+                for view in defs.views:
+                    for stmt in duckdb.statements(view, schema=schema):
+                        cur.execute(stmt)
+            finally:
+                cur.close()
+            conn.commit()
+    except BaseException:
+        engine.__exit__(None, None, None)
+        raise
+    return engine
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
@@ -263,8 +303,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     where = p.add_mutually_exclusive_group(required=True)
     where.add_argument("--database", type=Path, help="local DuckDB file from `load`")
     where.add_argument("--http-path", help="Databricks warehouse, e.g. the RT one")
+    where.add_argument("--s3-tables-arn", help="S3 Tables bucket loaded by `load`")
+    p.add_argument("--region", help="with --s3-tables-arn: AWS region of the table bucket")
     p.add_argument("--catalog", help="with --http-path: the catalog holding tpch_sf<N>")
-    p.add_argument("--scale-factor", "--sf", type=float, help="with --http-path: schema tpch_sf<N>")
+    p.add_argument(
+        "--scale-factor",
+        "--sf",
+        type=float,
+        help="with --http-path or --s3-tables-arn: schema tpch_sf<N>",
+    )
     p.add_argument(
         "--query",
         action="append",
@@ -277,12 +324,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.set_defaults(func=cmd_bench)
 
     args = parser.parse_args(argv)
-    if (
-        getattr(args, "func", None) is cmd_bench
-        and args.http_path
-        and (not args.catalog or args.scale_factor is None)
-    ):
-        parser.error("bench --http-path needs --catalog and --scale-factor")
+    if getattr(args, "func", None) is cmd_bench:
+        if args.http_path and (not args.catalog or args.scale_factor is None):
+            parser.error("bench --http-path needs --catalog and --scale-factor")
+        if args.s3_tables_arn and args.scale_factor is None:
+            parser.error("bench --s3-tables-arn needs --scale-factor")
     if getattr(args, "func", None) is cmd_bench and (args.repeats < 1 or args.warmup < 0):
         parser.error("bench needs --repeats of at least 1 and --warmup of at least 0")
     if getattr(args, "func", None) is cmd_load and not args.views_only and not args.parquet:

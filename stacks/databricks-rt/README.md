@@ -63,6 +63,30 @@ don't linger in staging.
 Staging uploads from your machine, which is fine for SF1 and SF10. For SF100 and
 up, generate and upload from AWS, e.g. with a stack 1 runner job.
 
+## Benchmark from inside AWS
+
+`just dbx-bench` times from wherever you run it, so a laptop's network sits in the
+fetch, `into` and `dump` stages. To time from the same cloud as the workspace:
+
+```sh
+export DATABRICKS_HOST=https://<workspace>.cloud.databricks.com
+export DATABRICKS_TOKEN=dapi...          # required: a runner cannot do browser OAuth
+just dbx-bench-aws /sql/1.0/warehouses/<rt-id> 10    # SF10, 10 repeats
+just dbx-runner-status                   # instance state, then the log once uploaded
+aws s3 cp s3://<storage-bucket>/results/runs/<run_id>/databricks-sf10.json results/bench/
+just dbx-runner-destroy                  # remove the role, security group and token parameter
+```
+
+[`runner/`](runner/) is a one-shot EC2 instance like stack 1's: it clones this repo
+(push your commit first; the recipe refuses an unpushed one), runs the command,
+uploads `/data/results` to `results/runs/<run_id>/` in the storage bucket, and
+terminates itself. `just dbx-run '<command>'` runs any command the same way. The
+token is stored as an SSM SecureString that only the runner's role can read, so it
+is not in the instance's user data, but it is in the runner root's local Terraform
+state until `dbx-runner-destroy`. Use a token scoped to the warehouse.
+
+Launch it in the workspace's region (the `region` default matches the data root's).
+
 ## Querying
 
 ```sh

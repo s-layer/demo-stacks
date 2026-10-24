@@ -34,6 +34,8 @@ git clone --quiet '${repo_url}' /data/repo
 cd /data/repo
 git checkout --quiet '${repo_ref}'
 echo "demo-stacks at $(git rev-parse HEAD)"
-uv sync --no-dev
+# Pin the newest interpreter CI covers: uv would otherwise pick a pre-release
+# (3.15), which has no duckdb wheel and so tries to compile it.
+uv sync --no-dev --python 3.14
 
 ${command}

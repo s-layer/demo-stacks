@@ -28,6 +28,7 @@ updates:
       - "/stacks/duckdb-s3tables/data"
       - "/stacks/duckdb-s3tables/runner"
       - "/stacks/databricks-rt/data"
+      - "/stacks/databricks-rt/runner"
     schedule:
       interval: "weekly"
     groups:

@@ -32,6 +32,19 @@ clones the commit you have checked out, so push it first; the recipe refuses an
 unpushed commit. One runner at a time: its variables live in
 `runner/run.auto.tfvars.json` (git-ignored) until `s3-runner-destroy`.
 
+## Benchmark
+
+```sh
+just s3-bench 10              # SF10, 10 repeats; or `just s3-bench 10 20`
+just s3-runner-status         # the log includes the results table once the job ends
+aws s3 cp s3://<results_bucket>/runs/<run_id>/duckdb-s3tables-sf10.json results/bench/
+just s3-runner-destroy
+```
+
+It runs `demo-stacks bench --s3-tables-arn` on a runner, so the timings include
+S3 Tables latency from inside AWS rather than from your laptop. Load the scale
+factor first with `just s3-load`.
+
 Runner state is local and throwaway. The data root's state is worth keeping, so
 give it a backend before sharing it.
 
