@@ -10,7 +10,7 @@ from pydantic_ai.messages import ToolReturnPart
 from pydantic_ai.models.function import AgentInfo, DeltaToolCall, DeltaToolCalls, FunctionModel
 from starlette.testclient import TestClient
 
-from demo_stacks import chat
+from demo_stacks import chat, cli
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterator
@@ -116,3 +116,38 @@ def test_the_session_cookie_is_set_once(app: TestClient) -> None:
     assert "HttpOnly" in first.headers["set-cookie"]
     again = app.get("/flint/charts/nope/rows")
     assert "set-cookie" not in again.headers
+
+
+@pytest.mark.parametrize(
+    "stray",
+    [
+        pytest.param("a@b=1", id="key SimpleCookie rejects"),
+        pytest.param('prefs={"a":1}', id="unquoted JSON value"),
+        pytest.param("foo", id="bare name"),
+    ],
+)
+def test_another_apps_cookie_keeps_the_session(app: TestClient, stray: str) -> None:
+    # Browsers send localhost cookies to every port, so other dev apps' cookies arrive too.
+    session = app.get("/flint/charts/nope/rows").cookies[chat.SESSION_COOKIE]
+    app.cookies.clear()
+    header = f"{stray}; {chat.SESSION_COOKIE}={session}"
+    response = app.get("/flint/charts/nope/rows", headers={"Cookie": header})
+    assert response.status_code == 404
+    assert "set-cookie" not in response.headers
+
+
+def test_an_empty_session_cookie_is_replaced(app: TestClient) -> None:
+    app.cookies.clear()
+    response = app.get("/flint/charts/nope/rows", headers={"Cookie": f"{chat.SESSION_COOKIE}="})
+    assert response.cookies[chat.SESSION_COOKIE]
+
+
+def test_the_cli_names_the_same_default_model() -> None:
+    assert cli._CHAT_MODEL == chat.DEFAULT_MODEL  # pyright: ignore[reportPrivateUsage]
+
+
+def test_chat_fails_when_the_app_cannot_start(tmp_path: Path) -> None:
+    missing = tmp_path / "missing.duckdb"
+    with pytest.raises(SystemExit) as exit_:
+        cli.main(["chat", "--database", str(missing), "--port", "0"])
+    assert exit_.value.code not in (0, None)
