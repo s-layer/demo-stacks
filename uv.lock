@@ -798,10 +798,10 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-ai-slim", extras = ["ag-ui", "anthropic"], marker = "extra == 'chat'", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6" },
-    { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], marker = "extra == 'chat'", git = "https://github.com/s-layer/flint-charts?rev=57051f379b725125cbc99282e012e12749feda19" },
-    { name = "semolina", marker = "extra == 'databricks'", git = "https://github.com/s-layer/semolina?rev=f6299983db4935237a0690a5e831ba0eeb85786a" },
-    { name = "semolina", extras = ["duckdb", "arrowmodel"], marker = "extra == 'bench'", git = "https://github.com/s-layer/semolina?rev=f6299983db4935237a0690a5e831ba0eeb85786a" },
-    { name = "semolina", extras = ["duckdb", "async"], marker = "extra == 'chat'", git = "https://github.com/s-layer/semolina?rev=f6299983db4935237a0690a5e831ba0eeb85786a" },
+    { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], marker = "extra == 'chat'", specifier = ">=0.1.0" },
+    { name = "semolina", marker = "extra == 'databricks'", specifier = ">=0.7.0" },
+    { name = "semolina", extras = ["duckdb", "arrowmodel"], marker = "extra == 'bench'", specifier = ">=0.7.0" },
+    { name = "semolina", extras = ["duckdb", "async"], marker = "extra == 'chat'", specifier = ">=0.9.0" },
     { name = "uvicorn", marker = "extra == 'chat'", specifier = ">=0.30" },
 ]
 provides-extras = ["databricks", "bench", "chat"]
@@ -818,8 +818,8 @@ dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.15" },
-    { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], git = "https://github.com/s-layer/flint-charts?rev=57051f379b725125cbc99282e012e12749feda19" },
-    { name = "semolina", extras = ["duckdb", "arrowmodel", "async"], git = "https://github.com/s-layer/semolina?rev=f6299983db4935237a0690a5e831ba0eeb85786a" },
+    { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], specifier = ">=0.1.0" },
+    { name = "semolina", extras = ["duckdb", "arrowmodel", "async"], specifier = ">=0.7.0" },
     { name = "types-pyyaml", specifier = ">=6" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
@@ -2231,12 +2231,16 @@ wheels = [
 [[package]]
 name = "s-layer-flint-charts"
 version = "0.1.0"
-source = { git = "https://github.com/s-layer/flint-charts?rev=57051f379b725125cbc99282e012e12749feda19#57051f379b725125cbc99282e012e12749feda19" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "orjson" },
     { name = "pyarrow" },
     { name = "s-layer-semantic-formats" },
     { name = "semolina" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/18/7a/1acbe94da9218d66512a2e6b23cb9a63d8d870c0eae7cb4fafc343d710f0/s_layer_flint_charts-0.1.0.tar.gz", hash = "sha256:d3fce13d030325905493e22baeac33e701e737f8b4bb28427cc5559ee5df3a24", size = 28265, upload-time = "2026-10-26T20:31:29.844Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f5/6b/46c5fec1f1d56adb0f5d9f61852a5066844167cd02e427adad73da456ac4/s_layer_flint_charts-0.1.0-py3-none-any.whl", hash = "sha256:f97bee6f57e31f897b05fe00c5520b797f6c8e703d4759ec7b7d9fb7877f3d6a", size = 33316, upload-time = "2026-10-26T20:31:28.689Z" },
 ]
 
 [package.optional-dependencies]
@@ -2265,11 +2269,15 @@ wheels = [
 
 [[package]]
 name = "semolina"
-version = "0.8.0"
-source = { git = "https://github.com/s-layer/semolina?rev=f6299983db4935237a0690a5e831ba0eeb85786a#f6299983db4935237a0690a5e831ba0eeb85786a" }
+version = "0.9.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "adbc-poolhouse" },
     { name = "s-layer-semantic-formats" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/98/b4/d06cb16c954ab40ad6a6c6b1834286a7483acac5a5dc7f9172d544360648/semolina-0.9.0.tar.gz", hash = "sha256:a9d382a35ebe1ad4fed98a49481e6d0ef33fc73807959920b5566c8efbe08033", size = 243391, upload-time = "2026-10-26T20:20:25.778Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/52/12/cc4f31e53c4cd945c1f2bda9e4ce096b8932c6ac07fd7bfe4954faa7fdeb/semolina-0.9.0-py3-none-any.whl", hash = "sha256:bb2417b01ee3f72a0f8848361b74c341ce3d23b38442d7a3c3152fe2783b6abd", size = 267152, upload-time = "2026-10-26T20:20:24.277Z" },
 ]
 
 [package.optional-dependencies]
