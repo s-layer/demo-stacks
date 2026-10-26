@@ -132,6 +132,10 @@ s3-run command instance_type="r7i.2xlarge":
     just _s3-run "run-$(date -u +%Y%m%d-%H%M%S)" \
         "$(jq -cn --arg c {{ quote(command) }} --arg t {{ quote(instance_type) }} '{job: "shell", command: $c, instance_type: $t}')"
 
+# Benchmark tpch_sf<sf> on a runner: launch, follow its log, fetch results to results/remote/, clean up
+s3-bench sf="10" repeats="10" instance_type="r7i.2xlarge":
+    uv run demo-stacks s3-bench --sf {{ sf }} --repeats {{ repeats }} --instance-type {{ quote(instance_type) }}
+
 # Show the current runner's state: instance status, then its log once uploaded
 s3-runner-status:
     #!/usr/bin/env bash

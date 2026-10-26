@@ -223,3 +223,40 @@ def test_dbx_bench_engine_closes_the_engine_if_the_set_fails(
     with pytest.raises(RuntimeError, match="SET refused"):
         dbx.bench_engine("/sql/1.0/warehouses/rt", "cat", 1)
     assert fake.closed
+
+
+def test_cli_bench_attaches_the_table_bucket_first(
+    monkeypatch: pytest.MonkeyPatch, warehouse: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Stack 1's views read through the attached bucket, so it is attached before timing."""
+    from demo_stacks import s3tables
+
+    seen: list[tuple[str, str | None]] = []
+
+    def setup_sql(arn: str, *, region: str | None = None) -> list[str]:
+        seen.append((arn, region))
+        return ["CREATE OR REPLACE TEMP MACRO attached() AS 1"]
+
+    monkeypatch.setattr(s3tables, "setup_sql", setup_sql)
+    argv = ["bench", "--database", str(warehouse), "--query", "region_year", "--repeats", "1"]
+    arn = "arn:aws:s3tables:eu-west-2:1:bucket/b"
+    assert cli.main([*argv, "--s3-tables-arn", arn, "--region", "eu-west-2"]) == 0
+    assert seen == [(arn, "eu-west-2")]
+    assert len(capsys.readouterr().out.splitlines()) == 1 + len(bench.PATHS)
+
+
+def test_cli_bench_s3_tables_needs_a_database() -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(
+            [
+                "bench",
+                *["--http-path", "/sql/1.0/warehouses/rt", "--catalog", "c", "--sf", "1"],
+                *["--s3-tables-arn", "arn:aws:s3tables:eu-west-2:1:bucket/b"],
+            ]
+        )
+    assert exc.value.code == 2
+
+
+def test_summary_table_reads_saved_summaries() -> None:
+    r = bench.Result("q", "sql", rows=7, runs=[1.0])
+    assert list(bench.summary_table([r.summary()])) == list(bench.table([r]))

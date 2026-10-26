@@ -162,7 +162,12 @@ def cmd_dbx_query(args: argparse.Namespace) -> int:
 
 
 def bench_engine(args: argparse.Namespace) -> Engine:
-    """The registered engine ``bench`` times: a local DuckDB file, or a Databricks warehouse."""
+    """
+    The registered engine ``bench`` times: a DuckDB file, or a Databricks warehouse.
+
+    With ``--s3-tables-arn`` the DuckDB file holds stack 1's views, which read through
+    the attached table bucket, so the engine attaches it before anything is timed.
+    """
     import semolina
 
     if args.http_path:
@@ -170,7 +175,20 @@ def bench_engine(args: argparse.Namespace) -> Engine:
     from adbc_poolhouse import DuckDBConfig
 
     cfg = DuckDBConfig(database=str(args.database), read_only=True, pool_size=1)
-    return semolina.create_engine(cfg, register=True)
+    engine = semolina.create_engine(cfg, register=True)
+    if args.s3_tables_arn:
+        try:
+            with engine.connect() as conn:
+                cur = conn.cursor()
+                try:
+                    for stmt in s3tables.setup_sql(args.s3_tables_arn, region=args.region):
+                        cur.execute(stmt)
+                finally:
+                    cur.close()
+        except BaseException:
+            engine.__exit__(None, None, None)
+            raise
+    return engine
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
@@ -194,6 +212,14 @@ def cmd_bench(args: argparse.Namespace) -> int:
         args.out.write_text(json.dumps([r.summary() for r in results], indent=2) + "\n")
         print(f"wrote {args.out}", file=sys.stderr)
     return 0
+
+
+def cmd_s3_bench(args: argparse.Namespace) -> int:
+    from demo_stacks import remote
+
+    return remote.s3_bench(
+        args.scale_factor, repeats=args.repeats, instance_type=args.instance_type
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -261,8 +287,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         "bench", help="time direct SQL, semolina Arrow and semolina JSON on a stack's engine"
     )
     where = p.add_mutually_exclusive_group(required=True)
-    where.add_argument("--database", type=Path, help="local DuckDB file from `load`")
+    where.add_argument("--database", type=Path, help="DuckDB file from `load`")
     where.add_argument("--http-path", help="Databricks warehouse, e.g. the RT one")
+    p.add_argument(
+        "--s3-tables-arn", help="with --database: attach this table bucket first (stack 1)"
+    )
+    p.add_argument("--region", help="with --s3-tables-arn: AWS region of the table bucket")
     p.add_argument("--catalog", help="with --http-path: the catalog holding tpch_sf<N>")
     p.add_argument("--scale-factor", "--sf", type=float, help="with --http-path: schema tpch_sf<N>")
     p.add_argument(
@@ -276,6 +306,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--out", type=Path, help="also write the summaries here as JSON")
     p.set_defaults(func=cmd_bench)
 
+    p = sub.add_parser(
+        "s3-bench",
+        help="benchmark stack 1 on a runner: launch, follow its log, fetch results, clean up",
+    )
+    p.add_argument("--scale-factor", "--sf", type=float, required=True)
+    p.add_argument("--repeats", type=int, default=10, help="timed runs per query and path")
+    p.add_argument("--instance-type", default="r7i.2xlarge")
+    p.set_defaults(func=cmd_s3_bench)
+
     args = parser.parse_args(argv)
     if (
         getattr(args, "func", None) is cmd_bench
@@ -283,6 +322,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         and (not args.catalog or args.scale_factor is None)
     ):
         parser.error("bench --http-path needs --catalog and --scale-factor")
+    if getattr(args, "func", None) is cmd_bench and args.s3_tables_arn and args.http_path:
+        parser.error("bench --s3-tables-arn goes with --database, not --http-path")
+    if getattr(args, "func", None) is cmd_s3_bench and args.repeats < 1:
+        parser.error("s3-bench needs --repeats of at least 1")
+    if getattr(args, "func", None) is cmd_s3_bench and (
+        args.scale_factor < 1 or not args.scale_factor.is_integer()
+    ):
+        # The runner's variables reject these, and then so would its destroy.
+        parser.error("s3-bench needs a whole --scale-factor of at least 1")
     if getattr(args, "func", None) is cmd_bench and (args.repeats < 1 or args.warmup < 0):
         parser.error("bench needs --repeats of at least 1 and --warmup of at least 0")
     if getattr(args, "func", None) is cmd_load and not args.views_only and not args.parquet:

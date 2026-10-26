@@ -447,6 +447,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+bench = [
+    { name = "arrowmodel" },
+    { name = "semolina", extra = ["arrowmodel", "duckdb"] },
+]
 databricks = [
     { name = "adbc-poolhouse", extra = ["databricks-python"] },
     { name = "databricks-sql-connector", extra = ["kernel", "pyarrow"] },
@@ -470,13 +474,15 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "adbc-poolhouse", extras = ["databricks-python"], marker = "extra == 'databricks'", specifier = ">=1.6.4" },
+    { name = "arrowmodel", marker = "extra == 'bench'", specifier = ">=1.1.0" },
     { name = "databricks-sql-connector", extras = ["kernel", "pyarrow"], marker = "extra == 'databricks'", specifier = ">=4.6" },
     { name = "duckdb", specifier = "==1.5.6" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "semolina", marker = "extra == 'databricks'", git = "https://github.com/s-layer/semolina?rev=60b17851390cb2955db2b170351ce52c62636960" },
+    { name = "semolina", extras = ["duckdb", "arrowmodel"], marker = "extra == 'bench'", git = "https://github.com/s-layer/semolina?rev=60b17851390cb2955db2b170351ce52c62636960" },
 ]
-provides-extras = ["databricks"]
+provides-extras = ["databricks", "bench"]
 
 [package.metadata.requires-dev]
 dev = [

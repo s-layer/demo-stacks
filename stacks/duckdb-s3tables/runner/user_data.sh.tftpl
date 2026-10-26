@@ -15,8 +15,19 @@ LOG=/data/results/runner.log
 mkdir -p /data/results
 exec > >(tee -a "$LOG") 2>&1
 
+# Push the log as the job goes, so `just s3-bench` and `s3-runner-status` can follow
+# it before the final upload. finish() stops the loop and waits for a push in flight,
+# so a late push cannot overwrite the final runner.log.
+STOP_LOG_PUSH=/data/stop-log-push
+(while sleep 15 && [ ! -e "$STOP_LOG_PUSH" ]; do
+  aws s3 cp --only-show-errors "$LOG" "$RUN_PREFIX/runner.log" || true
+done) &
+LOG_PUSH=$!
+
 finish() {
   status=$?
+  touch "$STOP_LOG_PUSH"
+  wait "$LOG_PUSH" 2>/dev/null || true
   echo "job exited with status $status"
   echo "$status" > /data/results/exit_status
   aws s3 cp --recursive --only-show-errors /data/results "$RUN_PREFIX/" || true
@@ -34,6 +45,6 @@ git clone --quiet '${repo_url}' /data/repo
 cd /data/repo
 git checkout --quiet '${repo_ref}'
 echo "demo-stacks at $(git rev-parse HEAD)"
-uv sync --no-dev
+uv sync --no-dev --extra bench
 
 ${command}

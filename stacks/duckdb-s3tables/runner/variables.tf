@@ -24,12 +24,12 @@ variable "run_id" {
 }
 
 variable "job" {
-  description = "What the runner does: \"load\" generates TPC-H at scale_factor and loads it into the table bucket, \"shell\" runs `command`."
+  description = "What the runner does: \"load\" generates TPC-H at scale_factor and loads it into the table bucket, \"bench\" runs `demo-stacks bench` on the views over namespace tpch_sf<scale_factor>, \"shell\" runs `command`."
   type        = string
   default     = "load"
   validation {
-    condition     = contains(["load", "shell"], var.job)
-    error_message = "job must be \"load\" or \"shell\"."
+    condition     = contains(["load", "bench", "shell"], var.job)
+    error_message = "job must be \"load\", \"bench\" or \"shell\"."
   }
 }
 
@@ -46,6 +46,16 @@ variable "scale_factor" {
   validation {
     condition     = var.scale_factor >= 1 && floor(var.scale_factor) == var.scale_factor
     error_message = "scale_factor must be a whole number of at least 1."
+  }
+}
+
+variable "bench_repeats" {
+  description = "For job = \"bench\": timed runs per query and path."
+  type        = number
+  default     = 10
+  validation {
+    condition     = var.bench_repeats >= 1
+    error_message = "bench_repeats must be at least 1."
   }
 }
 

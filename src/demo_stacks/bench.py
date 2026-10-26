@@ -280,11 +280,15 @@ def run(
 
 def table(results: list[Result]) -> Iterator[str]:
     """A plain-text table of the results, one line per query and path."""
+    return summary_table([r.summary() for r in results])
+
+
+def summary_table(summaries: list[dict[str, Any]]) -> Iterator[str]:
+    """:func:`table` from :meth:`Result.summary` dicts, as ``bench --out`` writes them."""
     yield f"{'query':<14}{'path':<24}{'rows':>8}{'median ms':>11}{'p95 ms':>9}  stages (median ms)"
-    for r in results:
-        s = r.summary()
+    for s in summaries:
         stages = ", ".join(f"{k} {v:.1f}" for k, v in s["stages_median_ms"].items())
         yield (
-            f"{r.query:<14}{r.path:<24}{r.rows:>8,}{s['median_ms']:>11.1f}{s['p95_ms']:>9.1f}"
-            f"  {stages}"
+            f"{s['query']:<14}{s['path']:<24}{s['rows']:>8,}{s['median_ms']:>11.1f}"
+            f"{s['p95_ms']:>9.1f}  {stages}"
         )

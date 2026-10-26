@@ -87,10 +87,14 @@ them alike.
 
 ```sh
 just bench-local 1                           # local DuckDB, SF1
+just s3-bench 10                             # S3 Tables on a runner in AWS (stack 1)
 just dbx-bench /sql/1.0/warehouses/<rt-id> 1 # Lakehouse//RT (stack 2)
 ```
 
-Both print a table and write the summaries to `results/bench/` as JSON. On
+Each prints a table. `bench-local` and `dbx-bench` write the summaries to
+`results/bench/` as JSON; `s3-bench` brings the runner's whole upload back to
+`results/remote/<run_id>/`. See [stack 1](stacks/duckdb-s3tables/README.md#benchmark)
+for what `s3-bench` does. On
 Databricks the benchmark holds one connection and turns its result cache off, so
 repeats run the query rather than return a cached answer.
 
