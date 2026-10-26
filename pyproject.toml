@@ -20,13 +20,13 @@ dependencies = [
 databricks = [
     "adbc-poolhouse[databricks-python]>=1.6.4",
     "databricks-sql-connector[kernel,pyarrow]>=4.6",
-    "semolina>=0.7.0",
+    "semolina>=0.9.0",
 ]
 # `demo-stacks bench`, locally or on a runner. 1.1.0 makes arrowmodel's fast
 # (model_construct) path faster than the validated one.
 bench = [
     "arrowmodel>=1.1.0",
-    "semolina[duckdb,arrowmodel]>=0.7.0",
+    "semolina[duckdb,arrowmodel]>=0.9.0",
 ]
 # `demo-stacks chat`: a chat app whose agent queries the local DuckDB views and draws
 # Flint charts. The browser half is in chat/.
@@ -49,7 +49,7 @@ dev = [
     "pytest>=8",
     "pytest-cov>=6",
     "ruff>=0.15",
-    "semolina[duckdb,arrowmodel,async]>=0.7.0",
+    "semolina[duckdb,arrowmodel,async]>=0.9.0",
     "pydantic-ai-slim[ag-ui,anthropic]>=2.0",
     "s-layer-flint-charts[server,pydantic-ai,validate]>=0.1.0",
     "httpx>=0.28",

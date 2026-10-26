@@ -799,8 +799,8 @@ requires-dist = [
     { name = "pydantic-ai-slim", extras = ["ag-ui", "anthropic"], marker = "extra == 'chat'", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], marker = "extra == 'chat'", specifier = ">=0.1.0" },
-    { name = "semolina", marker = "extra == 'databricks'", specifier = ">=0.7.0" },
-    { name = "semolina", extras = ["duckdb", "arrowmodel"], marker = "extra == 'bench'", specifier = ">=0.7.0" },
+    { name = "semolina", marker = "extra == 'databricks'", specifier = ">=0.9.0" },
+    { name = "semolina", extras = ["duckdb", "arrowmodel"], marker = "extra == 'bench'", specifier = ">=0.9.0" },
     { name = "semolina", extras = ["duckdb", "async"], marker = "extra == 'chat'", specifier = ">=0.9.0" },
     { name = "uvicorn", marker = "extra == 'chat'", specifier = ">=0.30" },
 ]
@@ -819,7 +819,7 @@ dev = [
     { name = "pytest-cov", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.15" },
     { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], specifier = ">=0.1.0" },
-    { name = "semolina", extras = ["duckdb", "arrowmodel", "async"], specifier = ">=0.7.0" },
+    { name = "semolina", extras = ["duckdb", "arrowmodel", "async"], specifier = ">=0.9.0" },
     { name = "types-pyyaml", specifier = ">=6" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]

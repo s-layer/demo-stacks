@@ -98,8 +98,7 @@ with dbx.semolina_engine("/sql/1.0/warehouses/<rt-id>", "s_layer_demo", 1):
 
 `semolina_engine` builds a `DatabricksPythonConfig` whose default catalog and schema
 are `s_layer_demo.tpch_sf<N>`, so the models' unqualified view names resolve there.
-Semolina support for this config is on semolina's main branch but not yet released,
-so `pyproject.toml` pins semolina to that commit until a release carries it.
+Semolina supports this config from 0.9.0, the floor in `pyproject.toml`.
 
 ## Not yet verified
 
