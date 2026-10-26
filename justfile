@@ -79,6 +79,23 @@ local-query sf="1":
     @uv run python -c "import duckdb, sys; con = duckdb.connect('data/tpch_sf{{ sf }}.duckdb'); con.execute('LOAD semantic_views'); print(con.sql(sys.argv[1]))" \
         "FROM semantic_view('tpch_sales', dimensions := ['customer_region', 'order_year'], metrics := ['net_revenue', 'profit']) ORDER BY ALL"
 
+# Chat with an agent that charts data/tpch_sf<sf>.duckdb (loads it first if missing; needs ANTHROPIC_API_KEY,
+# or DEMO_CHAT_MODEL for another provider). Serves the built UI on http://127.0.0.1:8000
+chat sf="1":
+    [ -f data/tpch_sf{{ sf }}.duckdb ] || just local {{ sf }}
+    cd chat && pnpm install && pnpm build
+    uv run --extra chat demo-stacks chat --database data/tpch_sf{{ sf }}.duckdb
+
+# As `chat`, with the UI from Vite's dev server on http://localhost:5173 (reloads on edits)
+chat-dev sf="1":
+    [ -f data/tpch_sf{{ sf }}.duckdb ] || just local {{ sf }}
+    cd chat && pnpm install
+    trap 'kill 0' EXIT; uv run --extra chat demo-stacks chat --database data/tpch_sf{{ sf }}.duckdb & (cd chat && pnpm dev)
+
+# Typecheck and build the chat UI, then drive it in a browser against a scripted model
+chat-test:
+    cd chat && pnpm install && pnpm build && pnpm test:browser
+
 # Time direct SQL, semolina Arrow and semolina JSON on data/tpch_sf<sf>.duckdb (loads it first if missing)
 bench-local sf="1" repeats="10":
     [ -f data/tpch_sf{{ sf }}.duckdb ] || just local {{ sf }}

@@ -28,6 +28,14 @@ bench = [
     "arrowmodel>=1.1.0",
     "semolina[duckdb,arrowmodel]>=0.7.0",
 ]
+# `demo-stacks chat`: a chat app whose agent queries the local DuckDB views and draws
+# Flint charts. The browser half is in chat/.
+chat = [
+    "pydantic-ai-slim[ag-ui,anthropic]>=2.0",
+    "s-layer-flint-charts[server,pydantic-ai,validate]>=0.1.0",
+    "semolina[duckdb,async]>=0.8.0",
+    "uvicorn>=0.30",
+]
 
 [project.scripts]
 demo-stacks = "demo_stacks.cli:main"
@@ -41,15 +49,20 @@ dev = [
     "pytest>=8",
     "pytest-cov>=6",
     "ruff>=0.15",
-    "semolina[duckdb,arrowmodel]>=0.7.0",
+    "semolina[duckdb,arrowmodel,async]>=0.7.0",
+    "pydantic-ai-slim[ag-ui,anthropic]>=2.0",
+    "s-layer-flint-charts[server,pydantic-ai,validate]>=0.1.0",
+    "httpx>=0.28",
+    "uvicorn>=0.30",
     "pyarrow-stubs>=20.0.0.20260625",
     "types-pyyaml>=6",
 ]
 
 [tool.uv.sources]
-# DatabricksPythonConfig support (s-layer/semolina#69) isn't in a release yet.
-# Drop this pin, and raise the semolina floors, once a release carries it.
-semolina = { git = "https://github.com/s-layer/semolina", rev = "60b17851390cb2955db2b170351ce52c62636960" }
+# s-layer-flint-charts needs semolina's query specs and field metadata, which no release
+# carries yet. Drop both pins, and raise the floors, once releases of both are out.
+semolina = { git = "https://github.com/s-layer/semolina", rev = "f6299983db4935237a0690a5e831ba0eeb85786a" }
+s-layer-flint-charts = { git = "https://github.com/s-layer/flint-charts", rev = "57051f379b725125cbc99282e012e12749feda19" }
 
 [build-system]
 requires = ["hatchling>=1.25"]

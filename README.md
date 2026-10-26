@@ -98,6 +98,35 @@ for what `s3-bench` does. On
 Databricks the benchmark holds one connection and turns its result cache off, so
 repeats run the query rather than return a cached answer.
 
+## Chat with charts
+
+`demo-stacks chat` serves a chat app over a local DuckDB file. You ask a question, the agent
+queries the TPC-H views through the generated semolina models, and it answers with a chart.
+The agent is a [Pydantic AI](https://ai.pydantic.dev/) agent with
+[s-layer-flint-charts](https://github.com/s-layer/flint-charts)' toolset. Each chart's
+[Flint](https://github.com/microsoft/flint-chart) input reaches the browser with its rows left on
+the server, behind a URL. The page in [`chat/`](chat/) is React and
+[CopilotKit](https://www.copilotkit.ai/), and draws every `show_chart` call with
+`@s-layer/flint-charts`.
+
+```sh
+export ANTHROPIC_API_KEY=...
+just chat 1          # loads data/tpch_sf1.duckdb if missing, builds the page, serves :8000
+just chat-dev 1      # the same, with the page from Vite's dev server on :5173
+```
+
+`DEMO_CHAT_MODEL`, or `--model`, picks another Pydantic AI model, such as
+`openai:gpt-5.2` with `OPENAI_API_KEY` set. `--validate` also checks each chart with Flint's own
+validator before it is drawn, which needs `npx`.
+
+CopilotKit talks AG-UI directly to the Python app's `/agent` route through
+`selfManagedAgents`, with no CopilotKit runtime in between. CopilotKit prints a warning that
+this is part of its Enterprise tier and needs a license key in production. That is fine for a
+local demo.
+
+A browser test (`just chat-test`) drives the page against the same app with a scripted model,
+so it needs no API key.
+
 ## Cost model
 
 Nothing bills while idle except stored bytes. Each stack splits into:
