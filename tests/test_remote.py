@@ -26,6 +26,11 @@ SUMMARY: dict[str, object] = {
     "stages_median_ms": {},
 }
 
+# A state poll that fails, as describe-instances does on a network blip.
+FAIL = "!fail"
+
+DESTROY = (["just", "s3-runner-destroy"], {"TF_CLI_ARGS_destroy": "-lock-timeout=5m"})
+
 
 class FakeShell:
     """Plays a runner that logs in three steps, then uploads and terminates."""
@@ -38,6 +43,7 @@ class FakeShell:
         logs: Sequence[str] = ("", "booting\n", "booting\nbenching\n", "booting\nbenching\ndone\n"),
         exit_status: str | None = "0\n",
         fail_apply: bool = False,
+        fail_destroy: bool = False,
         uploads_bench: bool = True,
     ) -> None:
         self.root = runner_root
@@ -45,6 +51,7 @@ class FakeShell:
         self.logs = list(logs)
         self.exit_status = exit_status
         self.fail_apply = fail_apply
+        self.fail_destroy = fail_destroy
         self.uploads_bench = uploads_bench
         self.streamed: list[tuple[list[str], dict[str, str]]] = []
         self.ran: list[list[str]] = []
@@ -59,6 +66,8 @@ class FakeShell:
             if self.fail_apply:
                 raise subprocess.CalledProcessError(1, list(args))
         elif list(args) == ["just", "s3-runner-destroy"]:
+            if self.fail_destroy:
+                raise subprocess.CalledProcessError(1, list(args))
             tfvars.unlink(missing_ok=True)
 
     def run(self, args: Sequence[str]) -> subprocess.CompletedProcess[str]:
@@ -68,6 +77,8 @@ class FakeShell:
             return self._ok(a, "i-0abc\n")
         if a[:3] == ["aws", "ec2", "describe-instances"]:
             state = self.states.pop(0) if len(self.states) > 1 else self.states[0]
+            if state == FAIL:
+                return subprocess.CompletedProcess(a, 255, "", "Could not connect")
             return self._ok(a, f"{state}\n")
         if a[:3] == ["aws", "s3", "cp"] and a[-1] == "-":
             if a[-2].endswith("runner.log"):
@@ -132,7 +143,7 @@ def test_s3_bench_end_to_end(runner_root: Path, tmp_path: Path) -> None:
         "instance_type": "r7i.2xlarge",
     }
     assert launch_env == {"TF_CLI_ARGS_apply": "-auto-approve -input=false"}
-    assert destroy_call == (["just", "s3-runner-destroy"], {})
+    assert destroy_call == DESTROY
     assert not (runner_root / "run.auto.tfvars.json").exists()
 
     log = [ln for ln in lines if ln.startswith("  | ")]
@@ -202,4 +213,81 @@ def test_cli_s3_bench_passes_its_arguments(monkeypatch: pytest.MonkeyPatch) -> N
 def test_cli_s3_bench_rejects_no_repeats() -> None:
     with pytest.raises(SystemExit) as exc:
         cli.main(["s3-bench", "--sf", "10", "--repeats", "0"])
+    assert exc.value.code == 2
+
+
+def test_s3_bench_waits_out_failed_polls(runner_root: Path, tmp_path: Path) -> None:
+    states = ("pending", FAIL, "running", *[FAIL] * (remote.MAX_POLL_FAILURES - 1), "terminated")
+    lines: list[str] = []
+    assert _bench(FakeShell(runner_root, states=states), tmp_path, lines) == 0
+    assert (
+        sum("could not read the runner's state" in ln for ln in lines) == remote.MAX_POLL_FAILURES
+    )
+    assert any(ln.startswith("region_year   sql") for ln in lines)
+
+
+def test_s3_bench_gives_up_after_failed_polls_in_a_row(runner_root: Path, tmp_path: Path) -> None:
+    shell = FakeShell(runner_root, states=("pending", *[FAIL] * remote.MAX_POLL_FAILURES))
+    with pytest.raises(RuntimeError, match="Could not connect"):
+        _bench(shell, tmp_path, [])
+    assert shell.streamed[-1] == DESTROY
+
+
+def test_s3_bench_prints_whole_lines_only(runner_root: Path, tmp_path: Path) -> None:
+    logs = ("", "boo", "booting\nbench", "booting\nbenching\ndo", "booting\nbenching\ndone")
+    lines: list[str] = []
+    states = ("pending", "running", "running", "running", "terminated")
+    assert _bench(FakeShell(runner_root, states=states, logs=logs), tmp_path, lines) == 0
+    log = [ln for ln in lines if ln.startswith("  | ")]
+    assert log == ["  | booting", "  | benching", "  | done"]
+
+
+def test_s3_bench_keeps_the_status_when_destroy_fails(runner_root: Path, tmp_path: Path) -> None:
+    lines: list[str] = []
+    shell = FakeShell(runner_root, exit_status="3\n", fail_destroy=True)
+    assert _bench(shell, tmp_path, lines) == 3
+    assert any("run 'just s3-runner-destroy' to clean up" in ln for ln in lines)
+
+
+def test_s3_bench_keeps_the_error_when_destroy_fails(runner_root: Path, tmp_path: Path) -> None:
+    shell = FakeShell(runner_root, fail_apply=True, fail_destroy=True)
+    with pytest.raises(subprocess.CalledProcessError) as exc:
+        _bench(shell, tmp_path, [])
+    assert exc.value.cmd[:2] == ["just", "_s3-run"], "the apply's error, not the destroy's"
+
+
+class _InterruptedProc:
+    """A child process whose first wait is cut short by Ctrl-C."""
+
+    def __init__(self) -> None:
+        self.waits = 0
+
+    def wait(self) -> int:
+        self.waits += 1
+        if self.waits == 1:
+            raise KeyboardInterrupt
+        return 130
+
+
+def test_stream_lets_the_child_finish_after_ctrl_c(monkeypatch: pytest.MonkeyPatch) -> None:
+    proc = _InterruptedProc()
+
+    def popen(*_: object, **__: object) -> _InterruptedProc:
+        return proc
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    with pytest.raises(KeyboardInterrupt):
+        remote.SubprocessShell().stream(["just", "_s3-run"])
+    assert proc.waits == 2, "waited for the child before cleaning up"
+
+
+def test_stream_raises_on_failure() -> None:
+    with pytest.raises(subprocess.CalledProcessError):
+        remote.SubprocessShell().stream(["false"])
+
+
+@pytest.mark.parametrize("sf", ["0.5", "0", "1.5"])
+def test_cli_s3_bench_rejects_scale_factors_the_runner_cannot_take(sf: str) -> None:
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["s3-bench", "--sf", sf])
     assert exc.value.code == 2

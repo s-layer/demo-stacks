@@ -34,6 +34,10 @@ RESULTS_ROOT = semantic.REPO_ROOT / "results" / "remote"
 # The instance states after which nothing more will be uploaded.
 _GONE = frozenset({"shutting-down", "terminated", "stopping", "stopped"})
 
+# Polls in a row that may fail (a network blip, expired credentials being refreshed)
+# before following gives up. Giving up destroys the runner, so this errs long.
+MAX_POLL_FAILURES = 6
+
 
 class Shell(Protocol):
     """Runs a command; :class:`SubprocessShell` is the real one."""
@@ -56,9 +60,18 @@ class SubprocessShell:
         )
 
     def stream(self, args: Sequence[str], *, env: Mapping[str, str] | None = None) -> None:
-        subprocess.run(
-            list(args), cwd=semantic.REPO_ROOT, env={**os.environ, **(env or {})}, check=True
+        proc = subprocess.Popen(
+            list(args), cwd=semantic.REPO_ROOT, env={**os.environ, **(env or {})}
         )
+        try:
+            code = proc.wait()
+        except KeyboardInterrupt:
+            # The child got the same Ctrl-C. Let it stop cleanly (Terraform releases its
+            # state lock) before the cleanup runs its own Terraform.
+            proc.wait()
+            raise
+        if code != 0:
+            raise subprocess.CalledProcessError(code, list(args))
 
 
 @dataclass(frozen=True)
@@ -116,20 +129,34 @@ def follow(
     The runner pushes its log every 15 seconds and uploads everything, ``exit_status``
     included, before it powers off, so the run is over once the instance is shutting
     down. A runner that is gone without an ``exit_status`` hit its lifetime limit or
-    died; that raises.
+    died; that raises. So do :data:`MAX_POLL_FAILURES` failed state polls in a row;
+    fewer are waited out.
     """
     printed = 0
     last_state = ""
+    failures = 0
     while True:
-        state = _instance_state(shell, run)
+        result = _instance_state(shell, run)
+        if result.returncode != 0:
+            failures += 1
+            if failures >= MAX_POLL_FAILURES:
+                _check(result)
+            echo(f"could not read the runner's state ({result.stderr.strip()}); retrying")
+            sleep(poll)
+            continue
+        failures = 0
+        state = result.stdout.strip()
+        gone = state in _GONE
         log = _s3_text(shell, run, "runner.log") or ""
-        for line in log[printed:].splitlines():
+        # While the runner is up, its last line may still be half written.
+        end = len(log) if gone else log.rfind("\n", printed) + 1
+        for line in log[printed:end].splitlines():
             echo(f"  | {line}")
-        printed = max(printed, len(log))
+        printed = max(printed, end)
         if state != last_state:
             echo(f"runner {run.instance_id} is {state}")
             last_state = state
-        if state in _GONE:
+        if gone:
             status = _s3_text(shell, run, "exit_status")
             if status is None:
                 raise RuntimeError(
@@ -151,7 +178,8 @@ def download(shell: Shell, run: Run, dest: Path) -> Path:
 
 def destroy(shell: Shell) -> None:
     """Remove the runner's role and security group, and the instance if still up."""
-    shell.stream(["just", "s3-runner-destroy"])
+    # Wait out a lock left by an apply that is still stopping after Ctrl-C.
+    shell.stream(["just", "s3-runner-destroy"], env={"TF_CLI_ARGS_destroy": "-lock-timeout=5m"})
 
 
 def s3_bench(
@@ -195,7 +223,11 @@ def s3_bench(
         # apply that failed partway. A run recorded by someone else is left alone.
         if recorded_run() == run:
             echo("destroying the runner's leftovers")
-            destroy(sh)
+            try:
+                destroy(sh)
+            except Exception as exc:  # noqa: BLE001 - the run's own outcome matters more
+                # Raising here would hide the job's status or the error that got us here.
+                echo(f"destroy failed ({exc}); run 'just s3-runner-destroy' to clean up")
 
 
 def recorded_run() -> str | None:
@@ -206,25 +238,22 @@ def recorded_run() -> str | None:
     return str(json.loads(tfvars.read_text())["run_id"])
 
 
-def _instance_state(shell: Shell, run: Run) -> str:
-    out = _check(
-        shell.run(
-            [
-                "aws",
-                "ec2",
-                "describe-instances",
-                "--region",
-                run.region,
-                "--instance-ids",
-                run.instance_id,
-                "--query",
-                "Reservations[0].Instances[0].State.Name",
-                "--output",
-                "text",
-            ]
-        )
+def _instance_state(shell: Shell, run: Run) -> subprocess.CompletedProcess[str]:
+    return shell.run(
+        [
+            "aws",
+            "ec2",
+            "describe-instances",
+            "--region",
+            run.region,
+            "--instance-ids",
+            run.instance_id,
+            "--query",
+            "Reservations[0].Instances[0].State.Name",
+            "--output",
+            "text",
+        ]
     )
-    return out.strip()
 
 
 def _s3_text(shell: Shell, run: Run, name: str) -> str | None:

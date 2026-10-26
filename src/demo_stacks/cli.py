@@ -326,6 +326,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("bench --s3-tables-arn goes with --database, not --http-path")
     if getattr(args, "func", None) is cmd_s3_bench and args.repeats < 1:
         parser.error("s3-bench needs --repeats of at least 1")
+    if getattr(args, "func", None) is cmd_s3_bench and (
+        args.scale_factor < 1 or not args.scale_factor.is_integer()
+    ):
+        # The runner's variables reject these, and then so would its destroy.
+        parser.error("s3-bench needs a whole --scale-factor of at least 1")
     if getattr(args, "func", None) is cmd_bench and (args.repeats < 1 or args.warmup < 0):
         parser.error("bench needs --repeats of at least 1 and --warmup of at least 0")
     if getattr(args, "func", None) is cmd_load and not args.views_only and not args.parquet:
