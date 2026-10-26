@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from semolina.engines.base import Engine
 
 GENERATED = semantic.REPO_ROOT / "generated"
+CHAT_UI = semantic.REPO_ROOT / "chat" / "dist"
 
 # Where each warehouse's tables live in the committed renders. `demo-stacks ddl`
 # renders for any other location.
@@ -27,6 +28,9 @@ DEFAULT_SCHEMAS = {
     "snowflake": "SNOWFLAKE_SAMPLE_DATA.TPCH_SF10",
     "databricks": dbx.schema("s_layer_demo", 10),
 }
+
+# demo_stacks.chat.DEFAULT_MODEL, repeated so `--help` works without the chat extra.
+_CHAT_MODEL = "anthropic:claude-sonnet-5-5"
 
 _SQL_RENDERERS: dict[str, Callable[..., str]] = {
     "duckdb": duckdb.render,
@@ -222,6 +226,38 @@ def cmd_s3_bench(args: argparse.Namespace) -> int:
     )
 
 
+def cmd_chat(args: argparse.Namespace) -> int:
+    from contextlib import AsyncExitStack
+
+    import anyio
+    import uvicorn
+
+    from demo_stacks import chat
+
+    static_dir = CHAT_UI if CHAT_UI.is_dir() else None
+    if static_dir is None:
+        print(f"{CHAT_UI} is not built; serving the API only (run `just chat-dev` for the UI)")
+
+    async def serve() -> None:
+        async with AsyncExitStack() as stack:
+            validator = None
+            if args.validate:
+                from s_layer_flint_charts import FlintSidecar
+
+                validator = await stack.enter_async_context(FlintSidecar())
+            app = chat.create_app(
+                args.database,
+                definitions=semantic.load(args.definitions),
+                model=args.model,
+                validator=validator,
+                static_dir=static_dir,
+            )
+            await uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port)).serve()
+
+    anyio.run(serve)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="demo-stacks", description=__doc__)
     parser.add_argument(
@@ -314,6 +350,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--repeats", type=int, default=10, help="timed runs per query and path")
     p.add_argument("--instance-type", default="r7i.2xlarge")
     p.set_defaults(func=cmd_s3_bench)
+
+    p = sub.add_parser("chat", help="chat with an agent that charts the local DuckDB views")
+    p.add_argument("--database", type=Path, required=True, help="DuckDB file from `load`")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument(
+        "--model", help=f"Pydantic AI model name (default: $DEMO_CHAT_MODEL or {_CHAT_MODEL})"
+    )
+    p.add_argument(
+        "--validate", action="store_true", help="also check each chart with Flint (needs npx)"
+    )
+    p.set_defaults(func=cmd_chat)
 
     args = parser.parse_args(argv)
     if (

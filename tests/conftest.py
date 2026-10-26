@@ -34,14 +34,20 @@ def warehouse(
     tmp_path_factory: pytest.TempPathFactory, parquet_dir: Path, defs: semantic.Definitions
 ) -> Path:
     """A DuckDB file with the TPC-H tables in schema `tpch` and both semantic views."""
-    path = tmp_path_factory.mktemp("wh") / "warehouse.duckdb"
+    return build_warehouse(tmp_path_factory.mktemp("wh") / "warehouse.duckdb", parquet_dir, defs)
+
+
+def build_warehouse(path: Path, parquet_dir: Path, defs: semantic.Definitions) -> Path:
+    """Load the Parquet into schema `tpch` of a new DuckDB file and create the views."""
     con = duckdb.connect(str(path))
-    dataset.load(con, parquet_dir, schema="tpch")
-    load_semantic_views(con)
-    for view in defs.views:
-        for stmt in render_duckdb.statements(view, schema="tpch"):
-            con.execute(stmt)
-    con.close()
+    try:
+        dataset.load(con, parquet_dir, schema="tpch")
+        load_semantic_views(con)
+        for view in defs.views:
+            for stmt in render_duckdb.statements(view, schema="tpch"):
+                con.execute(stmt)
+    finally:
+        con.close()
     return path
 
 
