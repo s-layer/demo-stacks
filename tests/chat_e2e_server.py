@@ -10,28 +10,16 @@ import sys
 import tempfile
 from pathlib import Path
 
-import duckdb
 import uvicorn
 
 from demo_stacks import chat, cli, dataset, semantic
-from demo_stacks.render import duckdb as render_duckdb
-from tests.conftest import SF, load_semantic_views
+from tests.conftest import SF, build_warehouse
 from tests.test_chat import scripted
 
 
 def warehouse(directory: Path) -> Path:
     dataset.generate(SF, directory / "tpch")
-    path = directory / "warehouse.duckdb"
-    con = duckdb.connect(str(path))
-    try:
-        dataset.load(con, directory / "tpch", schema="tpch")
-        load_semantic_views(con)
-        for view in semantic.load().views:
-            for stmt in render_duckdb.statements(view, schema="tpch"):
-                con.execute(stmt)
-    finally:
-        con.close()
-    return path
+    return build_warehouse(directory / "warehouse.duckdb", directory / "tpch", semantic.load())
 
 
 def main() -> None:

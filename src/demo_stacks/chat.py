@@ -13,7 +13,6 @@ import os
 import secrets
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from http.cookies import SimpleCookie
 from typing import TYPE_CHECKING
 
 import semolina
@@ -23,11 +22,14 @@ from pydantic_ai.ui.ag_ui import AGUIAdapter
 from s_layer_flint_charts import ChartStore
 from s_layer_flint_charts.pydantic_ai import chart_toolset
 from s_layer_flint_charts.server import chart_routes
+from semolina import SemanticView
 from starlette.applications import Starlette
+from starlette.datastructures import Headers
+from starlette.requests import cookie_parser
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from demo_stacks import cli
+from demo_stacks import cli, semantic
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -66,6 +68,7 @@ def session_of(request: Request) -> str:
 def create_app(
     database: Path,
     *,
+    definitions: semantic.Definitions | None = None,
     model: Model | str | None = None,
     validator: ChartValidator | None = None,
     static_dir: Path | None = None,
@@ -74,7 +77,9 @@ def create_app(
     The chat app over a DuckDB file that ``demo-stacks load`` wrote.
 
     Args:
-        database: The DuckDB file with the TPC-H tables and semantic views.
+        database: The DuckDB file with the tables and semantic views.
+        definitions: The definitions whose generated semolina models the agent queries, one
+            query tool per view. Default: ``semantic/tpch.yaml``.
         model: The model the agent runs on. Default: ``DEMO_CHAT_MODEL``, else
             :data:`DEFAULT_MODEL`.
         validator: Checks each chart with Flint itself, such as a started ``FlintSidecar``.
@@ -83,7 +88,12 @@ def create_app(
     Returns:
         The ASGI app.
     """
-    models = cli.load_models()
+    models = cli.load_models(definitions)
+    views = [
+        value
+        for value in vars(models).values()
+        if isinstance(value, type) and issubclass(value, SemanticView) and value is not SemanticView
+    ]
     store = ChartStore()
 
     def conversation_id(ctx: RunContext[Conversation]) -> str:
@@ -96,7 +106,7 @@ def create_app(
         instructions=INSTRUCTIONS,
         toolsets=[
             chart_toolset(
-                [models.TpchSales, models.TpchOrders],
+                views,
                 store=store,
                 session_id=conversation_id,
                 validator=validator,
@@ -143,12 +153,10 @@ class SessionCookie:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        cookies = SimpleCookie()
-        for name, value in scope["headers"]:
-            if name == b"cookie":
-                cookies.load(value.decode("latin-1"))
-        known = cookies.get(SESSION_COOKIE)
-        session_id = known.value if known is not None else secrets.token_urlsafe(24)
+        # Lenient on purpose: browsers send every localhost cookie to every port, and other
+        # apps' cookies need not be ones http.cookies would accept.
+        known = cookie_parser(Headers(scope=scope).get("cookie", "")).get(SESSION_COOKIE) or None
+        session_id = known or secrets.token_urlsafe(24)
         scope.setdefault("state", {})[SESSION_COOKIE] = session_id
 
         async def send_with_cookie(message: Message) -> None:

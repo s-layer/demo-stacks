@@ -246,7 +246,11 @@ def cmd_chat(args: argparse.Namespace) -> int:
 
                 validator = await stack.enter_async_context(FlintSidecar())
             app = chat.create_app(
-                args.database, model=args.model, validator=validator, static_dir=static_dir
+                args.database,
+                definitions=semantic.load(args.definitions),
+                model=args.model,
+                validator=validator,
+                static_dir=static_dir,
             )
             await uvicorn.Server(uvicorn.Config(app, host=args.host, port=args.port)).serve()
 
