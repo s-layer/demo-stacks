@@ -22,7 +22,7 @@ From the repo root, with AWS credentials in your environment:
 ```sh
 just s3-data-apply            # once: table bucket, namespaces, results bucket
 just s3-load 10               # launch a runner that loads SF10 into tpch_sf10
-just s3-runner-status         # instance state, then the job log once uploaded
+just s3-runner-status         # instance state, then the job log so far
 just s3-runner-destroy        # after it finishes: remove the role and security group
 ```
 
@@ -34,6 +34,29 @@ unpushed commit. One runner at a time: its variables live in
 
 Runner state is local and throwaway. The data root's state is worth keeping, so
 give it a backend before sharing it.
+
+## Benchmark
+
+```sh
+just s3-bench 10              # benchmark tpch_sf10 (load it first with s3-load)
+just s3-bench 100 20 r7i.4xlarge   # SF100, 20 repeats, a bigger runner
+```
+
+One command does the whole round trip:
+
+1. launches a runner with `job = "bench"` for the commit you have checked out
+   (pushed), without a second confirmation: running the recipe is the go-ahead;
+2. prints the runner's log as it goes (the runner pushes it to the results bucket
+   every 15 seconds) and its instance state;
+3. once the instance has uploaded and terminated, copies `runs/<run_id>/` to
+   `results/remote/<run_id>/` (`bench.json`, `runner.log`, `views.duckdb`) and prints
+   the benchmark table;
+4. destroys the runner's role and security group, which it also does on an error or
+   Ctrl-C (destroying a running instance terminates it).
+
+On the runner, the job creates the views in a fresh `views.duckdb` over the
+namespace and runs `demo-stacks bench` against them through the attached bucket,
+so the timings include S3 Tables reads from inside the region.
 
 ## Querying the views
 

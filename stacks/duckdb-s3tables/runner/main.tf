@@ -103,6 +103,17 @@ locals {
     "uv run demo-stacks generate --sf ${var.scale_factor} --chunks ${var.chunks} --out /data/tpch",
     "uv run demo-stacks load --parquet /data/tpch --s3-tables-arn \"$TABLE_BUCKET_ARN\" --region \"$AWS_REGION\" --sf ${var.scale_factor} --database \"$RESULTS_DIR/views.duckdb\"",
   ])
+  # The views go in a fresh file over the already-loaded namespace, then the
+  # benchmark reads them through the attached table bucket.
+  bench_command = join(" && ", [
+    "uv run demo-stacks load --views-only --s3-tables-arn \"$TABLE_BUCKET_ARN\" --region \"$AWS_REGION\" --sf ${var.scale_factor} --database \"$RESULTS_DIR/views.duckdb\"",
+    "uv run demo-stacks bench --database \"$RESULTS_DIR/views.duckdb\" --s3-tables-arn \"$TABLE_BUCKET_ARN\" --region \"$AWS_REGION\" --repeats ${var.bench_repeats} --out \"$RESULTS_DIR/bench.json\"",
+  ])
+  commands = {
+    load  = local.load_command
+    bench = local.bench_command
+    shell = var.command
+  }
 }
 
 resource "aws_instance" "runner" {
@@ -132,7 +143,7 @@ resource "aws_instance" "runner" {
     run_id               = var.run_id
     repo_url             = var.repo_url
     repo_ref             = var.repo_ref
-    command              = var.job == "load" ? local.load_command : var.command
+    command              = local.commands[var.job]
     max_lifetime_minutes = var.max_lifetime_minutes
   })
 

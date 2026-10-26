@@ -22,6 +22,12 @@ databricks = [
     "databricks-sql-connector[kernel,pyarrow]>=4.6",
     "semolina>=0.7.0",
 ]
+# `demo-stacks bench`, locally or on a runner. 1.1.0 makes arrowmodel's fast
+# (model_construct) path faster than the validated one.
+bench = [
+    "arrowmodel>=1.1.0",
+    "semolina[duckdb,arrowmodel]>=0.7.0",
+]
 
 [project.scripts]
 demo-stacks = "demo_stacks.cli:main"
@@ -30,7 +36,6 @@ demo-stacks = "demo_stacks.cli:main"
 dev = [
     "adbc-poolhouse[databricks-python]>=1.6.4",
     "databricks-sql-connector[kernel,pyarrow]>=4.6",
-    # 1.1.0 makes the fast (model_construct) path faster than the validated one.
     "arrowmodel>=1.1.0",
     "basedpyright>=1.38",
     "pytest>=8",
