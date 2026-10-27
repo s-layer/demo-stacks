@@ -32,7 +32,7 @@ bench = [
 # Flint charts. The browser half is in chat/.
 chat = [
     "pydantic-ai-slim[ag-ui,anthropic]>=2.0",
-    "s-layer-flint-charts[server,pydantic-ai,validate]>=0.1.0",
+    "s-layer-flint-charts[server,pydantic-ai,validate]>=0.2.0",
     "semolina[duckdb,async]>=0.9.1",
     "uvicorn>=0.30",
 ]
@@ -51,17 +51,12 @@ dev = [
     "ruff>=0.15",
     "semolina[duckdb,arrowmodel,async]>=0.9.1",
     "pydantic-ai-slim[ag-ui,anthropic]>=2.0",
-    "s-layer-flint-charts[server,pydantic-ai,validate]>=0.1.0",
+    "s-layer-flint-charts[server,pydantic-ai,validate]>=0.2.0",
     "httpx>=0.28",
     "uvicorn>=0.30",
     "pyarrow-stubs>=20.0.0.20260625",
     "types-pyyaml>=6",
 ]
-
-[tool.uv.sources]
-# semolina 0.9.1 needs s-layer-semantic-formats 0.2.0, and the only s-layer-flint-charts
-# release (0.1.0) caps it below 0.2. Drop this pin once a flint release carries #9.
-s-layer-flint-charts = { git = "https://github.com/s-layer/flint-charts", rev = "d4b8e48b5a20dc3191a4033126a1a00b34c0d79f" }
 
 [build-system]
 requires = ["hatchling>=1.25"]

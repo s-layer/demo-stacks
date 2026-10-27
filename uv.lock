@@ -798,7 +798,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-ai-slim", extras = ["ag-ui", "anthropic"], marker = "extra == 'chat'", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6" },
-    { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], marker = "extra == 'chat'", git = "https://github.com/s-layer/flint-charts?rev=d4b8e48b5a20dc3191a4033126a1a00b34c0d79f" },
+    { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], marker = "extra == 'chat'", specifier = ">=0.2.0" },
     { name = "semolina", marker = "extra == 'databricks'", specifier = ">=0.9.1" },
     { name = "semolina", extras = ["duckdb", "arrowmodel"], marker = "extra == 'bench'", specifier = ">=0.9.1" },
     { name = "semolina", extras = ["duckdb", "async"], marker = "extra == 'chat'", specifier = ">=0.9.1" },
@@ -818,7 +818,7 @@ dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-cov", specifier = ">=6" },
     { name = "ruff", specifier = ">=0.15" },
-    { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], git = "https://github.com/s-layer/flint-charts?rev=d4b8e48b5a20dc3191a4033126a1a00b34c0d79f" },
+    { name = "s-layer-flint-charts", extras = ["server", "pydantic-ai", "validate"], specifier = ">=0.2.0" },
     { name = "semolina", extras = ["duckdb", "arrowmodel", "async"], specifier = ">=0.9.1" },
     { name = "types-pyyaml", specifier = ">=6" },
     { name = "uvicorn", specifier = ">=0.30" },
@@ -2216,13 +2216,17 @@ wheels = [
 
 [[package]]
 name = "s-layer-flint-charts"
-version = "0.1.0"
-source = { git = "https://github.com/s-layer/flint-charts?rev=d4b8e48b5a20dc3191a4033126a1a00b34c0d79f#d4b8e48b5a20dc3191a4033126a1a00b34c0d79f" }
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "orjson" },
     { name = "pyarrow" },
     { name = "s-layer-semantic-formats" },
     { name = "semolina" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/85/25/60c07e7b8028209e7b6189eca92e9be3cf9e2be24fac67c0ee962c1e121e/s_layer_flint_charts-0.2.0.tar.gz", hash = "sha256:17ef159cb8f0083a97ad2b9867d9c7ed440c3e1745b0efce51f2418534ce7a25", size = 28279, upload-time = "2026-10-27T12:03:54.897Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8d/b8/a832ba1ae13bed82fbbe82c03b22ce7eab0219f09aa9b84ceec9187ffc9f/s_layer_flint_charts-0.2.0-py3-none-any.whl", hash = "sha256:33af274c293f2da80afa9ba961ef88eef80a66bc7d491f73cd14afbcf340d616", size = 33325, upload-time = "2026-10-27T12:03:53.678Z" },
 ]
 
 [package.optional-dependencies]
