@@ -13,7 +13,14 @@
 set -euo pipefail
 : "${PUBKEY_FILE:?set PUBKEY_FILE to your Snowflake public key (.pub)}"
 here="$(cd "$(dirname "$0")" && pwd)"
-pubkey="$(grep -v -- '-----' "$PUBKEY_FILE" | tr -d '\n')"
+# Refuse anything but a PEM public key, so a private key (or an OpenSSH ssh-rsa file) is
+# never printed, copied or sent.
+head -n1 "$PUBKEY_FILE" | tr -d '\r' | grep -qx -- '-----BEGIN PUBLIC KEY-----' || {
+  echo "PUBKEY_FILE must be a PEM public key (first line -----BEGIN PUBLIC KEY-----)" >&2
+  exit 1
+}
+pubkey="$(grep -v -- '-----' "$PUBKEY_FILE" | tr -d '\r\n')"
+[[ -n "$pubkey" ]] || { echo "no key found in $PUBKEY_FILE" >&2; exit 1; }
 
 if [[ "${1:-}" == "--worksheet" ]]; then
   sed "s|<% pubkey %>|$pubkey|" "$here/setup.sql"

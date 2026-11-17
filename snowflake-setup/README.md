@@ -15,7 +15,8 @@ Only the public key goes into it. Neither file reads or writes `~/.dbt/profiles.
 
 ## Steps
 
-1. Sign up for a new trial. Any sign-in works, Google included.
+1. Sign up for a new trial. Any sign-in works, Google included, but don't use `ANENTROPIC`
+   as the signup login: the script turns that user into a key-only service user.
 2. Print the SQL with your public key filled in, and copy it:
 
    ```bash
