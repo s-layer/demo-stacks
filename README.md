@@ -151,3 +151,6 @@ just prek      # every pre-commit hook on every file
 just fmt       # ruff + terraform fmt
 just render    # rewrite generated/ after editing semantic/
 ```
+
+To set up a fresh Snowflake trial account for the dbt `snowflake` target, see
+[`snowflake-setup/`](snowflake-setup/README.md).
