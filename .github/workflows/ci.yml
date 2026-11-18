@@ -233,11 +233,12 @@ jobs:
 
       - name: Upload the failed run's trace and screenshot
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-results
           path: chat/test-results/
           retention-days: 14
+          if-no-files-found: warn
 
   terraform:
     name: Terraform fmt and validate

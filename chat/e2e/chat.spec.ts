@@ -63,12 +63,14 @@ function countBars(canvas: HTMLCanvasElement): { colours: number; bars: number }
   const colours = new Set([...pixels].filter(([, n]) => n > most / 4).map(([key]) => key));
   let bars = 0;
   for (let y = 0; y < height; y++) {
+    // A run ends where its colour changes, so two bars that touch still count as two.
     let runs = 0;
-    let inside = false;
+    let prev = "";
     for (let x = 0; x < width; x++) {
-      const hit = colours.has(at(x, y));
-      if (hit && !inside) runs++;
-      inside = hit;
+      const key = at(x, y);
+      const colour = colours.has(key) ? key : "";
+      if (colour && colour !== prev) runs++;
+      prev = colour;
     }
     bars = Math.max(bars, runs);
   }
