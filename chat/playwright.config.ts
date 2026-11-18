@@ -8,7 +8,12 @@ export default defineConfig({
   testDir: "e2e",
   forbidOnly: !!process.env.CI,
   reporter: process.env.CI ? "github" : "list",
-  use: { baseURL: `http://127.0.0.1:${port}` },
+  // A red run explains itself: CI uploads these from chat/test-results.
+  use: {
+    baseURL: `http://127.0.0.1:${port}`,
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
   projects: [{ name: "chromium", use: devices["Desktop Chrome"] }],
   webServer: {
     command: `uv run python -m tests.chat_e2e_server ${port}`,
