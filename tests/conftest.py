@@ -62,3 +62,7 @@ def con(warehouse: Path) -> Iterator[duckdb.DuckDBPyConnection]:
 def load_semantic_views(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("INSTALL semantic_views FROM community")
     con.execute("LOAD semantic_views")
+
+
+# Under CI, a skipped test fails the run (tests/ci_skips.py).
+pytest_plugins = ["tests.ci_skips"]
