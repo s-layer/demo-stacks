@@ -8,9 +8,8 @@ description: Prove a change to demo-stacks works end to end. Use before saying a
 Run from the repository root:
 
 ```bash
-export CI=true  # CI's skip gate: a skipped test fails the run
 uv sync --locked --dev
-just check > /tmp/check.log 2>&1; echo "check rc=$?"
+CI=true just check > /tmp/check.log 2>&1; echo "check rc=$?"
 (cd chat && pnpm install --frozen-lockfile && pnpm exec playwright install chromium && pnpm build && pnpm test:browser) > /tmp/chat.log 2>&1; echo "chat rc=$?"
 ```
 
@@ -22,7 +21,9 @@ and semantic_views extensions on first use.
 
 `CI=true` turns on `tests/ci_skips.py`, which fails the run on any skip not allowed
 there, as CI does. Without it a skipped test only shows in the summary, and a run that
-skipped what you changed is not a pass.
+skipped what you changed is not a pass. It is set on each test line rather than
+exported, so it still holds when each line runs in a fresh shell, and other tools that
+read `CI` (Playwright, for one) keep their local behaviour.
 
 Take each command's exit status from the command itself. In a pipeline `$?` is the last
 command's status, so `cmd | tail` hides a failure. Redirect long output to a file, then
