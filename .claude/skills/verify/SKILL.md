@@ -10,14 +10,15 @@ Run from the repository root:
 ```bash
 uv sync --locked --dev
 CI=true just check > /tmp/check.log 2>&1; echo "check rc=$?"
-(cd chat && pnpm install --frozen-lockfile && pnpm exec playwright install chromium && pnpm build && pnpm test:browser) > /tmp/chat.log 2>&1; echo "chat rc=$?"
+(cd chat && pnpm install --frozen-lockfile && pnpm exec playwright install chromium && pnpm build && pnpm test:browser --forbid-only) > /tmp/chat.log 2>&1; echo "chat rc=$?"
 ```
 
 It passes when every command exits 0 and every printed `rc=` is 0. `just check` runs
 lint, basedpyright, the render check, pytest and `terraform validate`. The second
-command is `just chat-test` with CI's frozen lockfile and the Chromium install it needs:
-it builds the chat page and runs the Playwright test. The tests install DuckDB's tpch
-and semantic_views extensions on first use.
+command is `just chat-test` with CI's frozen lockfile and the Chromium install it needs,
+plus `--forbid-only` so a leftover `test.only` fails as in CI: it builds the chat page
+and runs the Playwright test. The tests install DuckDB's tpch and semantic_views
+extensions on first use.
 
 `CI=true` turns on `tests/ci_skips.py`, which fails the run on any skip not allowed
 there, as CI does. Without it a skipped test only shows in the summary, and a run that
