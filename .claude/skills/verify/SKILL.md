@@ -8,15 +8,21 @@ description: Prove a change to demo-stacks works end to end. Use before saying a
 Run from the repository root:
 
 ```bash
+export CI=true  # CI's skip gate: a skipped test fails the run
 uv sync --locked --dev
 just check > /tmp/check.log 2>&1; echo "check rc=$?"
-just chat-test > /tmp/chat.log 2>&1; echo "chat rc=$?"
+(cd chat && pnpm install --frozen-lockfile && pnpm exec playwright install chromium && pnpm build && pnpm test:browser) > /tmp/chat.log 2>&1; echo "chat rc=$?"
 ```
 
-It passes when both exit 0. `just check` runs lint, basedpyright, the render check,
-pytest and `terraform validate`. `just chat-test` builds the chat page and runs the
-Playwright test in Chromium. The tests install DuckDB's tpch and semantic_views
-extensions on first use.
+It passes when every command exits 0 and every printed `rc=` is 0. `just check` runs
+lint, basedpyright, the render check, pytest and `terraform validate`. The second
+command is `just chat-test` with CI's frozen lockfile and the Chromium install it needs:
+it builds the chat page and runs the Playwright test. The tests install DuckDB's tpch
+and semantic_views extensions on first use.
+
+`CI=true` turns on `tests/ci_skips.py`, which fails the run on any skip not allowed
+there, as CI does. Without it a skipped test only shows in the summary, and a run that
+skipped what you changed is not a pass.
 
 Take each command's exit status from the command itself. In a pipeline `$?` is the last
 command's status, so `cmd | tail` hides a failure. Redirect long output to a file, then
@@ -31,6 +37,7 @@ read the file.
 
 - the AWS and Databricks deployments: `terraform validate` only checks the configuration,
   nothing is applied
+- Python versions other than the one you ran: CI runs a version matrix
 
 ## When it fails
 
