@@ -102,7 +102,8 @@ catalogs and create secrets at startup".
 
 ## Not yet verified against AWS
 
-This has passed `terraform validate` and the local DuckDB tests (which stand an
-attached DuckDB file in for the Iceberg catalog), but has not been applied. The
-first real run will confirm DuckDB's S3 Tables `CREATE TABLE AS` path at scale and
+This has passed `terraform validate`, the offline Terraform tests (`just tf-test`, which
+mock the AWS provider and check what each root asks AWS for) and the local DuckDB tests
+(which stand an attached DuckDB file in for the Iceberg catalog), but has not been
+applied. The first real run will confirm DuckDB's S3 Tables `CREATE TABLE AS` path at scale and
 the IAM actions the runner needs.

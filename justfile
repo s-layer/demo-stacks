@@ -56,8 +56,15 @@ tf-validate:
         terraform -chdir="$root" validate; \
     done
 
+# Run every root's offline tests (<root>/tests/*.tftest.hcl, providers mocked; needs Terraform >= 1.7)
+tf-test:
+    for root in {{ tf_roots }}; do \
+        terraform -chdir="$root" init -backend=false -input=false >/dev/null; \
+        terraform -chdir="$root" test; \
+    done
+
 # Everything CI runs
-check: lint typecheck render-check test tf-validate
+check: lint typecheck render-check test tf-validate tf-test
 
 # --- shared layer ----------------------------------------------------------------
 
