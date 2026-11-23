@@ -14,7 +14,8 @@ CI=true just check > /tmp/check.log 2>&1; echo "check rc=$?"
 ```
 
 It passes when every command exits 0 and every printed `rc=` is 0. `just check` runs
-lint, basedpyright, the render check, pytest and `terraform validate`. The second
+lint, basedpyright, the render check, pytest, `terraform validate` and `terraform test`
+(offline, with every provider mocked; it needs Terraform 1.7 or later). The second
 command is `just chat-test` with CI's frozen lockfile and the Chromium install it needs,
 plus `--forbid-only` so a leftover `test.only` fails as in CI: it builds the chat page
 and runs the Playwright test. The tests install DuckDB's tpch and semantic_views
@@ -37,8 +38,8 @@ read the file.
 
 ## What it does not cover
 
-- the AWS and Databricks deployments: `terraform validate` only checks the configuration,
-  nothing is applied
+- the AWS and Databricks deployments: `terraform validate` and the mocked `terraform test`
+  only check the configuration and what it asks for; nothing is applied
 - Python versions other than the one you ran: CI runs a version matrix
 
 ## When it fails

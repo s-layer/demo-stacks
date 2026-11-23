@@ -112,4 +112,6 @@ Nothing in this stack has run against a workspace yet:
   errors, a failure shows up as the raw `databricks-sql-connector` error.
 
 The tests check the SQL this stack sends and the shape of the DDL, not
-Databricks' response to it.
+Databricks' response to it. Likewise the offline Terraform tests (`just tf-test`) mock
+the AWS, Databricks and time providers: they check that the bucket, IAM role, storage
+credential, catalog and loader agree with each other, not that a workspace accepts them.

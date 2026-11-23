@@ -241,7 +241,7 @@ jobs:
           if-no-files-found: warn
 
   terraform:
-    name: Terraform fmt and validate
+    name: Terraform fmt, validate and test
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -273,3 +273,9 @@ jobs:
       - name: terraform validate
         working-directory: ${{ matrix.root }}
         run: terraform validate
+
+      # Offline: every provider is mocked in tests/*.tftest.hcl, so this needs no
+      # credentials and creates nothing.
+      - name: terraform test
+        working-directory: ${{ matrix.root }}
+        run: terraform test

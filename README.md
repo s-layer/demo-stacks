@@ -146,7 +146,7 @@ git hooks and, for the AWS recipes, `jq` and the AWS CLI.
 
 ```sh
 just setup     # uv sync + prek install
-just check     # what CI runs: lint, typecheck, render-check, test, tf-validate
+just check     # what CI runs: lint, typecheck, render-check, test, tf-validate, tf-test
 just prek      # every pre-commit hook on every file
 just fmt       # ruff + terraform fmt
 just render    # rewrite generated/ after editing semantic/
