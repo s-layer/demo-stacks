@@ -188,17 +188,22 @@ run "bench_job" {
     instance_type        = "r7i.4xlarge"
     repo_ref             = "abc1234"
     max_lifetime_minutes = 60
+    region               = "us-east-1"
+    repo_url             = "https://example.com/fork/demo-stacks.git"
+    volume_size_gb       = 250
   }
 
   assert {
     condition = alltrue([
       for line in [
         "shutdown -h +60",
+        "export AWS_REGION='us-east-1'",
+        "git clone --quiet 'https://example.com/fork/demo-stacks.git' /data/repo",
         "git checkout --quiet 'abc1234'",
         "uv run demo-stacks load --views-only --s3-tables-arn \"$TABLE_BUCKET_ARN\" --region \"$AWS_REGION\" --sf 100 --database \"$RESULTS_DIR/views.duckdb\" && uv run demo-stacks bench --database \"$RESULTS_DIR/views.duckdb\" --s3-tables-arn \"$TABLE_BUCKET_ARN\" --region \"$AWS_REGION\" --repeats 20 --out \"$RESULTS_DIR/bench.json\"",
       ] : contains(split("\n", aws_instance.runner.user_data), line)
     ])
-    error_message = "A bench job should create the views over tpch_sf100, then benchmark them 20 times."
+    error_message = "A bench job should check out the given repo and ref in the given region, create the views over tpch_sf100, then benchmark them 20 times."
   }
 
   assert {
@@ -207,8 +212,11 @@ run "bench_job" {
   }
 
   assert {
-    condition     = aws_instance.runner.instance_type == "r7i.4xlarge"
-    error_message = "instance_type should reach the instance."
+    condition = (
+      aws_instance.runner.instance_type == "r7i.4xlarge" &&
+      aws_instance.runner.root_block_device[0].volume_size == 250
+    )
+    error_message = "instance_type and volume_size_gb should reach the instance."
   }
 }
 
@@ -344,6 +352,16 @@ run "rejects_fractional_scale_factor" {
 
   variables {
     scale_factor = 2.5
+  }
+
+  expect_failures = [var.scale_factor]
+}
+
+run "rejects_scale_factor_below_one" {
+  command = plan
+
+  variables {
+    scale_factor = 0
   }
 
   expect_failures = [var.scale_factor]

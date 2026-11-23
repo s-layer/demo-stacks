@@ -217,7 +217,17 @@ run "rejects_fractional_scale_factor" {
   command = plan
 
   variables {
-    scale_factors = [10, 0.5]
+    scale_factors = [10, 1.5]
+  }
+
+  expect_failures = [var.scale_factors]
+}
+
+run "rejects_scale_factor_below_one" {
+  command = plan
+
+  variables {
+    scale_factors = [0]
   }
 
   expect_failures = [var.scale_factors]
